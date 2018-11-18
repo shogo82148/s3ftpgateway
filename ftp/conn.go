@@ -13,6 +13,8 @@ type conn struct {
 	server *Server
 	rwc    net.Conn
 	ctrlw  *bufio.Writer
+
+	User string
 }
 
 func (c *conn) serve(ctx context.Context) {
@@ -23,15 +25,10 @@ func (c *conn) serve(ctx context.Context) {
 	for s.Scan() {
 		text := s.Text()
 		log.Println(text)
-		cmd, _ := c.parseLine(text)
-		switch cmd {
-		case "USER":
-			c.writeReply(331, "User name ok, need password")
-		case "PASS":
-			c.writeReply(230, "User logged in")
-		case "PWD":
-			c.writeReply(257, "dummy response")
-		default:
+		cmd, arg := c.parseLine(text)
+		if command, ok := commands[cmd]; ok {
+			command.Execute(ctx, c, cmd, arg)
+		} else {
 			c.writeReply(500, "Command not found")
 		}
 	}
