@@ -21,15 +21,22 @@ func (c *conn) serve(ctx context.Context) {
 	c.ctrlw = bufio.NewWriter(c.rwc)
 	s := bufio.NewScanner(c.rwc)
 
-	c.writeReply(220, "Service ready")
+	if _, err := c.writeReply(reply{Code: 220, Messages: []string{"Service ready"}}); err != nil {
+		return
+	}
 	for s.Scan() {
 		text := s.Text()
 		log.Println(text)
 		cmd, arg := c.parseLine(text)
+
+		var r reply
 		if command, ok := commands[cmd]; ok {
-			command.Execute(ctx, c, cmd, arg)
+			r = command.Execute(ctx, c, cmd, arg)
 		} else {
-			c.writeReply(500, "Command not found")
+			r = reply{Code: 500, Messages: []string{"Command not found"}}
+		}
+		if _, err := c.writeReply(r); err != nil {
+			return
 		}
 	}
 	if err := s.Err(); err != nil {
@@ -48,7 +55,14 @@ func (c *conn) parseLine(line string) (string, string) {
 	return cmd, arg
 }
 
-func (c *conn) writeReply(code int, messages ...string) (int, error) {
+type reply struct {
+	Code     int
+	Messages []string
+}
+
+func (c *conn) writeReply(r reply) (int, error) {
+	code := r.Code
+	messages := r.Messages
 	if len(messages) == 0 {
 		n, err := fmt.Fprintf(c.ctrlw, "%03d \r\n", code)
 		if err != nil {

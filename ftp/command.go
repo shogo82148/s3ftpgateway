@@ -6,7 +6,7 @@ type command interface {
 	IsExtend() bool
 	RequireParam() bool
 	RequireAuth() bool
-	Execute(ctx context.Context, c *conn, cmd, arg string) (int, error)
+	Execute(ctx context.Context, c *conn, cmd, arg string) reply
 }
 
 var commands = map[string]command{
@@ -20,7 +20,7 @@ func (commandUser) IsExtend() bool     { return false }
 func (commandUser) RequireParam() bool { return true }
 func (commandUser) RequireAuth() bool  { return false }
 
-func (commandUser) Execute(ctx context.Context, c *conn, cmd, arg string) (int, error) {
+func (commandUser) Execute(ctx context.Context, c *conn, cmd, arg string) reply {
 	c.User = arg
-	return c.writeReply(331, "User name ok, password required")
+	return reply{Code: 331, Messages: []string{"User name ok, password required"}}
 }
