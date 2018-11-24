@@ -16,6 +16,7 @@ type command interface {
 var commands = map[string]command{
 	"USER": commandUser{},
 	"PASS": commandPass{},
+	"TYPE": commandType{},
 
 	// FTP Extensions for IPv6 and NATs https://tools.ietf.org/html/rfc2428
 	"EPRT": commandEprt{},
@@ -50,6 +51,18 @@ func (commandPass) Execute(ctx context.Context, c *conn, cmd, arg string) reply 
 	}
 	c.auth = auth
 	return reply{Code: 230, Messages: []string{"User logged in, proceed"}}
+}
+
+// commandType
+type commandType struct{}
+
+func (commandType) IsExtend() bool     { return false }
+func (commandType) RequireParam() bool { return false }
+func (commandType) RequireAuth() bool  { return true }
+
+func (commandType) Execute(ctx context.Context, c *conn, cmd, arg string) reply {
+	// TODO: Support other types
+	return reply{Code: 200, Messages: []string{"Type set to ASCII"}}
 }
 
 // commandEprt allows for the specification of an extended address for the data connection
