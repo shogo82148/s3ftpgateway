@@ -19,8 +19,7 @@ type conn struct {
 	user string
 	auth *Authorization
 
-	pasvListener net.Listener
-	dtp          net.Conn
+	dt dataTransfer
 }
 
 func (c *conn) serve(ctx context.Context) {
@@ -120,17 +119,13 @@ func (c *conn) fileSystem() ctxvfs.FileSystem {
 }
 
 func (c *conn) close() error {
-	if ln := c.pasvListener; ln != nil {
-		c.pasvListener = nil
-		ln.Close()
-	}
-	if conn := c.dtp; conn != nil {
+	if conn := c.dt; conn != nil {
 		conn.Close()
-		c.dtp = nil
+		c.dt = nil
 	}
 	if conn := c.rwc; conn != nil {
 		conn.Close()
-		c.dtp = nil
+		c.rwc = nil
 	}
 	return nil
 }

@@ -3,6 +3,7 @@ package ftp
 import (
 	"context"
 	"fmt"
+	"io"
 	"net"
 	"strconv"
 )
@@ -36,7 +37,7 @@ var commands = map[string]command{
 	"PWD":  commandPwd{},
 	"QUIT": commandQuit{},
 	"REIN": nil,
-	"RETR": nil,
+	"RETR": commandRetr{},
 	"RMD":  nil,
 	"RNFR": nil,
 	"RNTO": nil,
@@ -85,7 +86,7 @@ var commands = map[string]command{
 	"MLSD": nil,
 	"MLST": nil,
 	"REST": nil,
-	"SIZE": nil,
+	"SIZE": commandSize{},
 }
 
 type commandPass struct{}
@@ -128,6 +129,40 @@ func (commandQuit) Execute(ctx context.Context, c *conn, cmd, arg string) reply 
 	c.writeReply(reply{Code: 221, Messages: []string{"Good bye"}})
 	c.rwc.Close()
 	return reply{}
+}
+
+// commandRetr causes the server-DTP to transfer a copy of the
+// file, specified in the pathname, to the server- or user-DTP
+// at the other end of the data connection.  The status and
+// contents of the file at the server site shall be unaffected.
+type commandRetr struct{}
+
+func (commandRetr) IsExtend() bool     { return false }
+func (commandRetr) RequireParam() bool { return true }
+func (commandRetr) RequireAuth() bool  { return true }
+
+func (commandRetr) Execute(ctx context.Context, c *conn, cmd, arg string) reply {
+	f, err := c.fileSystem().Open(ctx, arg)
+	if err != nil {
+		return reply{Code: 553, Messages: []string{"Requested action not taken"}}
+	}
+	defer f.Close()
+
+	c.writeReply(reply{Code: 150, Messages: []string{"File status okay; about to open data connection."}})
+	conn, err := c.dt.Conn(ctx)
+	if err != nil {
+		return reply{Code: 552, Messages: []string{"Requested file action aborted."}}
+	}
+	n, err := io.Copy(conn, f)
+	if err != nil {
+		return reply{Code: 552, Messages: []string{"Requested file action aborted."}}
+	}
+	if dt := c.dt; dt != nil {
+		c.dt = nil
+		dt.Close()
+	}
+
+	return reply{Code: 226, Messages: []string{fmt.Sprintf("Data transfer starting %d bytes", n)}}
 }
 
 // commandType
@@ -176,23 +211,20 @@ func (commandEpsv) RequireParam() bool { return false }
 func (commandEpsv) RequireAuth() bool  { return true }
 
 func (commandEpsv) Execute(ctx context.Context, c *conn, cmd, arg string) reply {
-	if ln := c.pasvListener; ln != nil {
-		c.pasvListener = nil
-		ln.Close()
+	if dt := c.dt; dt != nil {
+		c.dt = nil
+		dt.Close()
 	}
-	if conn := c.dtp; conn != nil {
-		conn.Close()
-		c.dtp = nil
-	}
-	ln, err := net.Listen("tcp", ":0")
+	dt, err := newPassiveDataTransfer()
 	if err != nil {
 		return reply{Code: 425, Messages: []string{"Data connection failed"}}
 	}
-	_, port, err := net.SplitHostPort(ln.Addr().String())
+	_, port, err := net.SplitHostPort(dt.l.Addr().String())
 	if err != nil {
+		dt.Close()
 		return reply{Code: 425, Messages: []string{"Data connection failed"}}
 	}
-	c.pasvListener = ln
+	c.dt = dt
 	return reply{Code: 229, Messages: []string{fmt.Sprintf("Entering extended passive mode (|||%s|)", port)}}
 }
 
