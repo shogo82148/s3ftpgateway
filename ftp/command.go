@@ -17,6 +17,7 @@ var commands = map[string]command{
 	"USER": commandUser{},
 	"PASS": commandPass{},
 	"TYPE": commandType{},
+	"QUIT": commandQuit{},
 
 	// FTP Extensions for IPv6 and NATs https://tools.ietf.org/html/rfc2428
 	"EPRT": commandEprt{},
@@ -63,6 +64,19 @@ func (commandType) RequireAuth() bool  { return true }
 func (commandType) Execute(ctx context.Context, c *conn, cmd, arg string) reply {
 	// TODO: Support other types
 	return reply{Code: 200, Messages: []string{"Type set to ASCII"}}
+}
+
+// commandQuit closes the control connection
+type commandQuit struct{}
+
+func (commandQuit) IsExtend() bool     { return false }
+func (commandQuit) RequireParam() bool { return false }
+func (commandQuit) RequireAuth() bool  { return false }
+
+func (commandQuit) Execute(ctx context.Context, c *conn, cmd, arg string) reply {
+	c.writeReply(reply{Code: 221, Messages: []string{"Good bye"}})
+	c.rwc.Close()
+	return reply{}
 }
 
 // commandEprt allows for the specification of an extended address for the data connection
