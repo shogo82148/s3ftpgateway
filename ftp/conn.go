@@ -16,11 +16,15 @@ type conn struct {
 
 	user string
 	auth *Authorization
+
+	pasvListener net.Listener
+	dtp          net.Conn
 }
 
 func (c *conn) serve(ctx context.Context) {
 	c.ctrlw = bufio.NewWriter(c.rwc)
 	s := bufio.NewScanner(c.rwc)
+	defer c.close()
 
 	if _, err := c.writeReply(reply{Code: 220, Messages: []string{"Service ready"}}); err != nil {
 		return
@@ -107,4 +111,20 @@ func (c *conn) writeReply(r reply) (int, error) {
 		return m, err
 	}
 	return m, nil
+}
+
+func (c *conn) close() error {
+	if ln := c.pasvListener; ln != nil {
+		c.pasvListener = nil
+		ln.Close()
+	}
+	if conn := c.dtp; conn != nil {
+		conn.Close()
+		c.dtp = nil
+	}
+	if conn := c.rwc; conn != nil {
+		conn.Close()
+		c.dtp = nil
+	}
+	return nil
 }
