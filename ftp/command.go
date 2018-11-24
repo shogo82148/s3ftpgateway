@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"net"
+	"strconv"
 )
 
 type command interface {
@@ -14,26 +15,77 @@ type command interface {
 }
 
 var commands = map[string]command{
-	"USER": commandUser{},
+	// FILE TRANSFER PROTOCOL (FTP)
+	// https://tools.ietf.org/html/rfc959
+	"ABOR": nil,
+	"ACCT": nil,
+	"ALLO": nil,
+	"APPE": nil,
+	"CDUP": nil,
+	"CWD":  nil,
+	"DELE": nil,
+	"HELP": nil,
+	"LIST": nil,
+	"MKD":  nil,
+	"NLST": nil,
+	"NOOP": nil,
+	"MODE": nil,
 	"PASS": commandPass{},
-	"TYPE": commandType{},
+	"PASV": nil,
+	"PORT": nil,
+	"PWD":  commandPwd{},
 	"QUIT": commandQuit{},
+	"REIN": nil,
+	"RETR": nil,
+	"RMD":  nil,
+	"RNFR": nil,
+	"RNTO": nil,
+	"SITE": nil,
+	"SMNT": nil,
+	"STAT": nil,
+	"STOR": nil,
+	"STOU": nil,
+	"STRU": nil,
+	"SYST": nil,
+	"TYPE": commandType{},
+	"USER": commandUser{},
 
-	// FTP Extensions for IPv6 and NATs https://tools.ietf.org/html/rfc2428
+	// FTP Operation Over Big Address Records (FOOBAR)
+	// https://tools.ietf.org/html/rfc1639
+	"LPRT": nil,
+	"LPSV": nil,
+
+	// FTP Security Extensions
+	// https://tools.ietf.org/html/rfc2228
+	"ADAT": nil,
+	"AUTH": nil,
+	"CCC":  nil,
+	"CONF": nil,
+	"ENC":  nil,
+	"MIC":  nil,
+	"PBSZ": nil,
+
+	// Feature negotiation mechanism for the File Transfer Protocol
+	// https://tools.ietf.org/html/rfc2389
+	"FEAT": nil,
+	"OPTS": nil,
+
+	// FTP Extensions for IPv6 and NATs
+	// https://tools.ietf.org/html/rfc2428
 	"EPRT": commandEprt{},
 	"EPSV": commandEpsv{},
-}
 
-// commandUser responds to the USER FTP command by asking for the password
-type commandUser struct{}
+	// Internationalization of the File Transfer Protocol
+	// https://tools.ietf.org/html/rfc2640
+	"LANG": nil,
 
-func (commandUser) IsExtend() bool     { return false }
-func (commandUser) RequireParam() bool { return true }
-func (commandUser) RequireAuth() bool  { return false }
-
-func (commandUser) Execute(ctx context.Context, c *conn, cmd, arg string) reply {
-	c.user = arg
-	return reply{Code: 331, Messages: []string{"User name ok, password required"}}
+	// Extensions to FTP
+	// https://tools.ietf.org/html/rfc3659
+	"MDTM": nil,
+	"MLSD": nil,
+	"MLST": nil,
+	"REST": nil,
+	"SIZE": nil,
 }
 
 type commandPass struct{}
@@ -54,16 +106,15 @@ func (commandPass) Execute(ctx context.Context, c *conn, cmd, arg string) reply 
 	return reply{Code: 230, Messages: []string{"User logged in, proceed"}}
 }
 
-// commandType
-type commandType struct{}
+type commandPwd struct{}
 
-func (commandType) IsExtend() bool     { return false }
-func (commandType) RequireParam() bool { return false }
-func (commandType) RequireAuth() bool  { return true }
+func (commandPwd) IsExtend() bool     { return false }
+func (commandPwd) RequireParam() bool { return false }
+func (commandPwd) RequireAuth() bool  { return true }
 
-func (commandType) Execute(ctx context.Context, c *conn, cmd, arg string) reply {
-	// TODO: Support other types
-	return reply{Code: 200, Messages: []string{"Type set to ASCII"}}
+func (commandPwd) Execute(ctx context.Context, c *conn, cmd, arg string) reply {
+	// TODO: It's dummy response. fix me plz.
+	return reply{Code: 257, Messages: []string{`"/"`}}
 }
 
 // commandQuit closes the control connection
@@ -78,6 +129,33 @@ func (commandQuit) Execute(ctx context.Context, c *conn, cmd, arg string) reply 
 	c.rwc.Close()
 	return reply{}
 }
+
+// commandType
+type commandType struct{}
+
+func (commandType) IsExtend() bool     { return false }
+func (commandType) RequireParam() bool { return false }
+func (commandType) RequireAuth() bool  { return true }
+
+func (commandType) Execute(ctx context.Context, c *conn, cmd, arg string) reply {
+	// TODO: Support other types
+	return reply{Code: 200, Messages: []string{"Type set to ASCII"}}
+}
+
+// commandUser responds to the USER FTP command by asking for the password
+type commandUser struct{}
+
+func (commandUser) IsExtend() bool     { return false }
+func (commandUser) RequireParam() bool { return true }
+func (commandUser) RequireAuth() bool  { return false }
+
+func (commandUser) Execute(ctx context.Context, c *conn, cmd, arg string) reply {
+	c.user = arg
+	return reply{Code: 331, Messages: []string{"User name ok, password required"}}
+}
+
+// FTP Extensions for IPv6 and NATs
+// https://tools.ietf.org/html/rfc2428
 
 // commandEprt allows for the specification of an extended address for the data connection
 type commandEprt struct{}
@@ -116,4 +194,23 @@ func (commandEpsv) Execute(ctx context.Context, c *conn, cmd, arg string) reply 
 	}
 	c.pasvListener = ln
 	return reply{Code: 229, Messages: []string{fmt.Sprintf("Entering extended passive mode (|||%s|)", port)}}
+}
+
+// Extensions to FTP
+// https://tools.ietf.org/html/rfc3659
+
+// commandSize return the file size.
+type commandSize struct{}
+
+func (commandSize) IsExtend() bool     { return true }
+func (commandSize) RequireParam() bool { return true }
+func (commandSize) RequireAuth() bool  { return true }
+
+func (commandSize) Execute(ctx context.Context, c *conn, cmd, arg string) reply {
+	fs := c.fileSystem()
+	stat, err := fs.Stat(ctx, arg)
+	if err != nil {
+		return reply{Code: 550, Messages: []string{"File system error"}}
+	}
+	return reply{Code: 229, Messages: []string{strconv.FormatInt(stat.Size(), 10)}}
 }

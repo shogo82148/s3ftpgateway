@@ -7,6 +7,8 @@ import (
 	"log"
 	"net"
 	"strings"
+
+	"github.com/sourcegraph/ctxvfs"
 )
 
 type conn struct {
@@ -35,7 +37,7 @@ func (c *conn) serve(ctx context.Context) {
 		cmd, arg := c.parseLine(text)
 
 		var r reply
-		if command, ok := commands[cmd]; ok {
+		if command, ok := commands[cmd]; ok && command != nil {
 			r = command.Execute(ctx, c, cmd, arg)
 		} else {
 			r = reply{Code: 500, Messages: []string{"Command not found"}}
@@ -111,6 +113,10 @@ func (c *conn) writeReply(r reply) (int, error) {
 		return m, err
 	}
 	return m, nil
+}
+
+func (c *conn) fileSystem() ctxvfs.FileSystem {
+	return c.server.FileSystem
 }
 
 func (c *conn) close() error {

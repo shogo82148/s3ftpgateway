@@ -4,6 +4,8 @@ import (
 	"context"
 	"net"
 	"time"
+
+	"github.com/sourcegraph/ctxvfs"
 )
 
 // A Server defines patameters for running a FTP server.
@@ -11,6 +13,8 @@ type Server struct {
 	Addr string // TCP address to listen on, ":ftp" if empty
 
 	Authorizer Authorizer // Authorize method
+
+	FileSystem ctxvfs.FileSystem // Virtual File System
 
 	listener net.Listener
 }
