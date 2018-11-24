@@ -14,7 +14,8 @@ type conn struct {
 	rwc    net.Conn
 	ctrlw  *bufio.Writer
 
-	User string
+	user string
+	auth *Authorization
 }
 
 func (c *conn) serve(ctx context.Context) {

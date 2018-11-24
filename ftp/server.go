@@ -10,6 +10,8 @@ import (
 type Server struct {
 	Addr string // TCP address to listen on, ":ftp" if empty
 
+	Authorizer Authorizer // Authorize method
+
 	listener net.Listener
 }
 
@@ -59,6 +61,14 @@ func (s *Server) newConn(rwc net.Conn) *conn {
 		rwc:    rwc,
 	}
 	return c
+}
+
+func (s *Server) authorize(ctx context.Context, user, passord string) (*Authorization, error) {
+	auth := s.Authorizer
+	if auth == nil {
+		auth = AnonymousAuthorizer
+	}
+	return auth.Authorize(ctx, user, passord)
 }
 
 // Close immediately closes all active net.Listeners
