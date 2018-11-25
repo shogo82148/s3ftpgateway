@@ -4,9 +4,11 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"log"
 	"net"
 	"strconv"
 	"strings"
+	"time"
 )
 
 // Command is a ftp command.
@@ -86,7 +88,7 @@ var commands = map[string]command{
 	// FTP Security Extensions
 	// https://tools.ietf.org/html/rfc2228
 	"ADAT": nil,
-	"AUTH": nil,
+	"AUTH": commandAuth{},
 	"CCC":  nil,
 	"CONF": nil,
 	"ENC":  nil,
@@ -214,6 +216,25 @@ func (commandUser) RequireAuth() bool  { return false }
 func (commandUser) Execute(ctx context.Context, c *ServerConn, cmd *Command) {
 	c.user = cmd.Arg
 	c.WriteReply(&Reply{Code: 331, Messages: []string{"User name ok, password required."}})
+}
+
+// FTP Security Extensions
+// https://tools.ietf.org/html/rfc2228
+type commandAuth struct{}
+
+func (commandAuth) IsExtend() bool     { return true }
+func (commandAuth) RequireParam() bool { return true }
+func (commandAuth) RequireAuth() bool  { return false }
+
+func (commandAuth) Execute(ctx context.Context, c *ServerConn, cmd *Command) {
+	if !strings.EqualFold(cmd.Arg, "TLS") {
+		c.WriteReply(&Reply{Code: 550, Messages: []string{"Action not taken."}})
+	}
+	c.WriteReply(&Reply{Code: 234, Messages: []string{"AUTH command OK."}})
+	time.Sleep(time.Second) // TODO: remove me!!
+	if err := c.upgradeToTLS(); err != nil {
+		log.Println(err)
+	}
 }
 
 // FTP Extensions for IPv6 and NATs

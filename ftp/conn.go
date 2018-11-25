@@ -4,6 +4,7 @@ import (
 	"bufio"
 	"bytes"
 	"context"
+	"crypto/tls"
 	"fmt"
 	"log"
 	"net"
@@ -144,6 +145,15 @@ func (c *ServerConn) writeReply(r *Reply) (int, error) {
 		return m, err
 	}
 	return m, nil
+}
+
+func (c *ServerConn) upgradeToTLS() error {
+	tlsConn := tls.Server(c.rwc, c.server.TLSConfig)
+	if err := tlsConn.Handshake(); err != nil {
+		return err
+	}
+	c.ctrl = newDumbTelnetConn(tlsConn, tlsConn)
+	return nil
 }
 
 func (c *ServerConn) fileSystem() ctxvfs.FileSystem {
