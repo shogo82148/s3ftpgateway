@@ -90,9 +90,8 @@ func (r Reply) String() string {
 	} else if len(r.Messages) == 1 {
 		fmt.Fprintf(&buf, "%03d %s\n", r.Code, r.Messages[0])
 	} else {
-		fmt.Fprintf(&buf, "%03d-%s\n", r.Code, r.Messages[0])
-		for _, msg := range r.Messages[1 : len(r.Messages)-1] {
-			buf.WriteString(msg)
+		for _, msg := range r.Messages[:len(r.Messages)-1] {
+			fmt.Fprintf(&buf, "%03d-%s\n", r.Code, msg)
 			buf.WriteByte('\n')
 		}
 		fmt.Fprintf(&buf, "%03d %s\n", r.Code, r.Messages[len(r.Messages)-1])
@@ -131,21 +130,15 @@ func (c *ServerConn) writeReply(r *Reply) (int, error) {
 
 	// multiple lines Reply
 	m := 0
-	n, err := fmt.Fprintf(c.ctrl, "%03d-%s\r\n", code, messages[0])
-	m += n
-	if err != nil {
-		return m, err
-	}
-
-	for _, msg := range messages[1 : len(messages)-1] {
-		n, err := fmt.Fprintf(c.ctrl, "%s\r\n", msg)
+	for _, msg := range messages[:len(messages)-1] {
+		n, err := fmt.Fprintf(c.ctrl, "%03d-%s\r\n", code, msg)
 		m += n
 		if err != nil {
 			return m, err
 		}
 	}
 
-	n, err = fmt.Fprintf(c.ctrl, "%03d %s\r\n", code, messages[len(messages)-1])
+	n, err := fmt.Fprintf(c.ctrl, "%03d %s\r\n", code, messages[len(messages)-1])
 	m += n
 	if err != nil {
 		return m, err
