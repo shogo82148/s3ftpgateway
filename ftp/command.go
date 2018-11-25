@@ -6,13 +6,40 @@ import (
 	"io"
 	"net"
 	"strconv"
+	"strings"
 )
+
+// Command is a ftp command.
+type Command struct {
+	Name string
+	Arg  string
+}
+
+func (c Command) String() string {
+	if len(c.Arg) == 0 {
+		return c.Name
+	}
+	return c.Name + " " + c.Arg
+}
+
+// ParseCommand parses ftp commands.
+func ParseCommand(s string) (*Command, error) {
+	var c Command
+	s = strings.TrimSpace(s)
+	if idx := strings.Index(s, " "); idx >= 0 {
+		c.Name = strings.ToUpper(s[:idx])
+		c.Arg = strings.TrimSpace(s[idx:])
+	} else {
+		c.Name = strings.ToUpper(s)
+	}
+	return &c, nil
+}
 
 type command interface {
 	IsExtend() bool
 	RequireParam() bool
 	RequireAuth() bool
-	Execute(ctx context.Context, c *conn, cmd, arg string) reply
+	Execute(ctx context.Context, c *ServerConn, cmd *Command)
 }
 
 var commands = map[string]command{
@@ -95,16 +122,16 @@ func (commandPass) IsExtend() bool     { return false }
 func (commandPass) RequireParam() bool { return true }
 func (commandPass) RequireAuth() bool  { return false }
 
-func (commandPass) Execute(ctx context.Context, c *conn, cmd, arg string) reply {
-	auth, err := c.server.authorize(ctx, c.user, arg)
+func (commandPass) Execute(ctx context.Context, c *ServerConn, cmd *Command) {
+	auth, err := c.server.authorize(ctx, c.user, cmd.Arg)
 	if err != nil {
 		if err == ErrAuthorizeFailed {
-			return reply{Code: 530, Messages: []string{"Not logged in"}}
+			c.WriteReply(&Reply{Code: 530, Messages: []string{"Not logged in"}})
 		}
-		return reply{Code: 500, Messages: []string{"Internal error"}}
+		c.WriteReply(&Reply{Code: 500, Messages: []string{"Internal error"}})
 	}
 	c.auth = auth
-	return reply{Code: 230, Messages: []string{"User logged in, proceed"}}
+	c.WriteReply(&Reply{Code: 230, Messages: []string{"User logged in, proceed"}})
 }
 
 type commandPwd struct{}
@@ -113,9 +140,9 @@ func (commandPwd) IsExtend() bool     { return false }
 func (commandPwd) RequireParam() bool { return false }
 func (commandPwd) RequireAuth() bool  { return true }
 
-func (commandPwd) Execute(ctx context.Context, c *conn, cmd, arg string) reply {
+func (commandPwd) Execute(ctx context.Context, c *ServerConn, cmd *Command) {
 	// TODO: It's dummy response. fix me plz.
-	return reply{Code: 257, Messages: []string{`"/"`}}
+	c.WriteReply(&Reply{Code: 257, Messages: []string{`"/"`}})
 }
 
 // commandQuit closes the control connection
@@ -125,10 +152,8 @@ func (commandQuit) IsExtend() bool     { return false }
 func (commandQuit) RequireParam() bool { return false }
 func (commandQuit) RequireAuth() bool  { return false }
 
-func (commandQuit) Execute(ctx context.Context, c *conn, cmd, arg string) reply {
-	c.writeReply(reply{Code: 221, Messages: []string{"Good bye"}})
-	c.rwc.Close()
-	return reply{}
+func (commandQuit) Execute(ctx context.Context, c *ServerConn, cmd *Command) {
+	c.WriteReply(&Reply{Code: 221, Messages: []string{"Good bye"}})
 }
 
 // commandRetr causes the server-DTP to transfer a copy of the
@@ -141,28 +166,30 @@ func (commandRetr) IsExtend() bool     { return false }
 func (commandRetr) RequireParam() bool { return true }
 func (commandRetr) RequireAuth() bool  { return true }
 
-func (commandRetr) Execute(ctx context.Context, c *conn, cmd, arg string) reply {
-	f, err := c.fileSystem().Open(ctx, arg)
+func (commandRetr) Execute(ctx context.Context, c *ServerConn, cmd *Command) {
+	f, err := c.fileSystem().Open(ctx, cmd.Arg)
 	if err != nil {
-		return reply{Code: 553, Messages: []string{"Requested action not taken"}}
+		c.WriteReply(&Reply{Code: 553, Messages: []string{"Requested action not taken."}})
 	}
 	defer f.Close()
 
-	c.writeReply(reply{Code: 150, Messages: []string{"File status okay; about to open data connection."}})
+	c.WriteReply(&Reply{Code: 150, Messages: []string{"File status okay; about to open data connection."}})
 	conn, err := c.dt.Conn(ctx)
 	if err != nil {
-		return reply{Code: 552, Messages: []string{"Requested file action aborted."}}
+		c.WriteReply(&Reply{Code: 552, Messages: []string{"Requested file action aborted."}})
+		return
 	}
 	n, err := io.Copy(conn, f)
 	if err != nil {
-		return reply{Code: 552, Messages: []string{"Requested file action aborted."}}
+		c.WriteReply(&Reply{Code: 552, Messages: []string{"Requested file action aborted."}})
+		return
 	}
 	if dt := c.dt; dt != nil {
 		c.dt = nil
 		dt.Close()
 	}
 
-	return reply{Code: 226, Messages: []string{fmt.Sprintf("Data transfer starting %d bytes", n)}}
+	c.WriteReply(&Reply{Code: 226, Messages: []string{fmt.Sprintf("Data transfer starting %d bytes", n)}})
 }
 
 // commandType
@@ -172,9 +199,9 @@ func (commandType) IsExtend() bool     { return false }
 func (commandType) RequireParam() bool { return false }
 func (commandType) RequireAuth() bool  { return true }
 
-func (commandType) Execute(ctx context.Context, c *conn, cmd, arg string) reply {
+func (commandType) Execute(ctx context.Context, c *ServerConn, cmd *Command) {
 	// TODO: Support other types
-	return reply{Code: 200, Messages: []string{"Type set to ASCII"}}
+	c.WriteReply(&Reply{Code: 200, Messages: []string{"Type set to ASCII"}})
 }
 
 // commandUser responds to the USER FTP command by asking for the password
@@ -184,9 +211,9 @@ func (commandUser) IsExtend() bool     { return false }
 func (commandUser) RequireParam() bool { return true }
 func (commandUser) RequireAuth() bool  { return false }
 
-func (commandUser) Execute(ctx context.Context, c *conn, cmd, arg string) reply {
-	c.user = arg
-	return reply{Code: 331, Messages: []string{"User name ok, password required"}}
+func (commandUser) Execute(ctx context.Context, c *ServerConn, cmd *Command) {
+	c.user = cmd.Arg
+	c.WriteReply(&Reply{Code: 331, Messages: []string{"User name ok, password required."}})
 }
 
 // FTP Extensions for IPv6 and NATs
@@ -199,8 +226,8 @@ func (commandEprt) IsExtend() bool     { return true }
 func (commandEprt) RequireParam() bool { return true }
 func (commandEprt) RequireAuth() bool  { return false }
 
-func (commandEprt) Execute(ctx context.Context, c *conn, cmd, arg string) reply {
-	return reply{Code: 502, Messages: []string{"Command not implemented"}}
+func (commandEprt) Execute(ctx context.Context, c *ServerConn, cmd *Command) {
+	c.WriteReply(&Reply{Code: 502, Messages: []string{"Command not implemented."}})
 }
 
 // commandEpsv requests that a server listen on a data port and wait for a connection
@@ -210,22 +237,24 @@ func (commandEpsv) IsExtend() bool     { return true }
 func (commandEpsv) RequireParam() bool { return false }
 func (commandEpsv) RequireAuth() bool  { return true }
 
-func (commandEpsv) Execute(ctx context.Context, c *conn, cmd, arg string) reply {
+func (commandEpsv) Execute(ctx context.Context, c *ServerConn, cmd *Command) {
 	if dt := c.dt; dt != nil {
 		c.dt = nil
 		dt.Close()
 	}
 	dt, err := newPassiveDataTransfer()
 	if err != nil {
-		return reply{Code: 425, Messages: []string{"Data connection failed"}}
+		c.WriteReply(&Reply{Code: 425, Messages: []string{"Data connection failed."}})
+		return
 	}
 	_, port, err := net.SplitHostPort(dt.l.Addr().String())
 	if err != nil {
 		dt.Close()
-		return reply{Code: 425, Messages: []string{"Data connection failed"}}
+		c.WriteReply(&Reply{Code: 425, Messages: []string{"Data connection failed."}})
+		return
 	}
 	c.dt = dt
-	return reply{Code: 229, Messages: []string{fmt.Sprintf("Entering extended passive mode (|||%s|)", port)}}
+	c.WriteReply(&Reply{Code: 229, Messages: []string{fmt.Sprintf("Entering extended passive mode (|||%s|)", port)}})
 }
 
 // Extensions to FTP
@@ -238,11 +267,12 @@ func (commandSize) IsExtend() bool     { return true }
 func (commandSize) RequireParam() bool { return true }
 func (commandSize) RequireAuth() bool  { return true }
 
-func (commandSize) Execute(ctx context.Context, c *conn, cmd, arg string) reply {
+func (commandSize) Execute(ctx context.Context, c *ServerConn, cmd *Command) {
 	fs := c.fileSystem()
-	stat, err := fs.Stat(ctx, arg)
+	stat, err := fs.Stat(ctx, cmd.Arg)
 	if err != nil {
-		return reply{Code: 550, Messages: []string{"File system error"}}
+		c.WriteReply(&Reply{Code: 550, Messages: []string{"File system error"}})
+		return
 	}
-	return reply{Code: 229, Messages: []string{strconv.FormatInt(stat.Size(), 10)}}
+	c.WriteReply(&Reply{Code: 229, Messages: []string{strconv.FormatInt(stat.Size(), 10)}})
 }

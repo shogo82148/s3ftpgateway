@@ -53,6 +53,10 @@ func (c *dumbTelnetConn) Read(buf []byte) (int, error) {
 		if b != telnetCmdIac {
 			buf[i] = b
 			i++
+			if b == '\n' {
+				// found the end of line, exit loop.
+				break
+			}
 			continue
 		}
 

@@ -59,8 +59,8 @@ func (s *Server) Serve(l net.Listener) error {
 	}
 }
 
-func (s *Server) newConn(rwc net.Conn) *conn {
-	c := &conn{
+func (s *Server) newConn(rwc net.Conn) *ServerConn {
+	c := &ServerConn{
 		server: s,
 		rwc:    rwc,
 	}
