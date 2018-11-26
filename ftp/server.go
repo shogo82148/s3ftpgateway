@@ -2,6 +2,7 @@ package ftp
 
 import (
 	"context"
+	"crypto/tls"
 	"net"
 	"time"
 
@@ -15,6 +16,8 @@ type Server struct {
 	Authorizer Authorizer // Authorize method
 
 	FileSystem ctxvfs.FileSystem // Virtual File System
+
+	TLSConfig *tls.Config
 
 	listener net.Listener
 }

@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"log"
 	"net"
 	"strconv"
 	"strings"
@@ -86,12 +87,13 @@ var commands = map[string]command{
 	// FTP Security Extensions
 	// https://tools.ietf.org/html/rfc2228
 	"ADAT": nil,
-	"AUTH": nil,
+	"AUTH": commandAuth{},
 	"CCC":  nil,
 	"CONF": nil,
 	"ENC":  nil,
 	"MIC":  nil,
-	"PBSZ": nil,
+	"PBSZ": commandPbsz{},
+	"PROT": commandProt{},
 
 	// Feature negotiation mechanism for the File Transfer Protocol
 	// https://tools.ietf.org/html/rfc2389
@@ -216,6 +218,64 @@ func (commandUser) Execute(ctx context.Context, c *ServerConn, cmd *Command) {
 	c.WriteReply(&Reply{Code: 331, Messages: []string{"User name ok, password required."}})
 }
 
+// FTP Security Extensions
+// https://tools.ietf.org/html/rfc2228
+type commandAuth struct{}
+
+func (commandAuth) IsExtend() bool     { return true }
+func (commandAuth) RequireParam() bool { return true }
+func (commandAuth) RequireAuth() bool  { return false }
+
+func (commandAuth) Execute(ctx context.Context, c *ServerConn, cmd *Command) {
+	if !strings.EqualFold(cmd.Arg, "TLS") {
+		c.WriteReply(&Reply{Code: 550, Messages: []string{"Action not taken."}})
+		return
+	}
+	c.WriteReply(&Reply{Code: 234, Messages: []string{"AUTH command OK."}})
+	if err := c.upgradeToTLS(); err != nil {
+		log.Println(err)
+	}
+}
+
+type commandPbsz struct{}
+
+func (commandPbsz) IsExtend() bool     { return true }
+func (commandPbsz) RequireParam() bool { return true }
+func (commandPbsz) RequireAuth() bool  { return false }
+
+func (commandPbsz) Execute(ctx context.Context, c *ServerConn, cmd *Command) {
+	if c.tls && cmd.Arg == "0" {
+		c.WriteReply(&Reply{Code: 200, Messages: []string{"OK"}})
+	} else {
+		c.WriteReply(&Reply{Code: 550, Messages: []string{"Action not taken."}})
+	}
+}
+
+// commandProt specify the data channel protection level.
+type commandProt struct{}
+
+func (commandProt) IsExtend() bool     { return true }
+func (commandProt) RequireParam() bool { return true }
+func (commandProt) RequireAuth() bool  { return false }
+
+func (commandProt) Execute(ctx context.Context, c *ServerConn, cmd *Command) {
+	switch cmd.Arg {
+	case "C": // Clear
+		c.prot = protectionLevelClear
+		c.WriteReply(&Reply{Code: 200, Messages: []string{"OK"}})
+	case "S": // Safe
+		c.WriteReply(&Reply{Code: 536, Messages: []string{"Safe level is not supported"}})
+	case "E": // Confidential
+		c.WriteReply(&Reply{Code: 536, Messages: []string{"Confidential level is not supported"}})
+	case "P": // Private
+		if c.tls {
+			c.WriteReply(&Reply{Code: 200, Messages: []string{"OK"}})
+		} else {
+			c.WriteReply(&Reply{Code: 536, Messages: []string{"Private level is only supported in TLS"}})
+		}
+	}
+}
+
 // FTP Extensions for IPv6 and NATs
 // https://tools.ietf.org/html/rfc2428
 
@@ -242,7 +302,7 @@ func (commandEpsv) Execute(ctx context.Context, c *ServerConn, cmd *Command) {
 		c.dt = nil
 		dt.Close()
 	}
-	dt, err := newPassiveDataTransfer()
+	dt, err := c.newPassiveDataTransfer()
 	if err != nil {
 		c.WriteReply(&Reply{Code: 425, Messages: []string{"Data connection failed."}})
 		return

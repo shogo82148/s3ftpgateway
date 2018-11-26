@@ -1,12 +1,4 @@
-package main
-
-import (
-	"crypto/tls"
-	"log"
-
-	"github.com/shogo82148/s3ftpgateway/ftp"
-	"github.com/sourcegraph/ctxvfs"
-)
+package internal
 
 // LocalhostCert is a PEM-encoded TLS cert with SAN IPs
 // "127.0.0.1" and "[::1]", expiring at Jan 29 16:00:00 2084 GMT.
@@ -43,23 +35,3 @@ eL/MII8RgzrWf5nCFvAJE6IySB3ZLFUjZdQOrJGvTAA7/XbHiyFQpAHPaqenkGFB
 3LDsxeB9/T8qD+wIkQJBAJGo1I8gu2kacq7FW+C6fQq/G7c5m8msks7ddZ87B8Qn
 6NpYnBnfJPWMExNKe9aDWkY9Lrtwj+KsKu6EVDmrCrc=
 -----END RSA PRIVATE KEY-----`)
-
-func main() {
-	cert, err := tls.X509KeyPair(LocalhostCert, LocalhostKey)
-	if err != nil {
-		log.Fatal(err)
-	}
-	s := &ftp.Server{
-		Addr: ":8000",
-		FileSystem: ctxvfs.Map(map[string][]byte{
-			"hoge": []byte("Hello ftp!"),
-		}),
-		TLSConfig: &tls.Config{
-			NextProtos:   []string{"ftp"},
-			Certificates: []tls.Certificate{cert},
-		},
-	}
-	if err := s.ListenAndServe(); err != nil {
-		log.Fatal(err)
-	}
-}
