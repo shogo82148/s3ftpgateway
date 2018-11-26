@@ -1,11 +1,13 @@
 package ftptest
 
 import (
+	"crypto/tls"
 	"flag"
 	"fmt"
 	"net"
 
 	"github.com/shogo82148/s3ftpgateway/ftp"
+	"github.com/shogo82148/s3ftpgateway/ftp/internal"
 	"github.com/sourcegraph/ctxvfs"
 )
 
@@ -67,7 +69,27 @@ func (s *Server) Start() {
 		panic("Server already started")
 	}
 	s.URL = "ftp://" + s.Listener.Addr().String()
+	s.setupTLS()
 	go s.Config.Serve(s.Listener)
+}
+
+func (s *Server) setupTLS() {
+	cert, err := tls.X509KeyPair(internal.LocalhostCert, internal.LocalhostKey)
+	if err != nil {
+		panic(fmt.Sprintf("httptest: NewTLSServer: %v", err))
+	}
+
+	if existingConfig := s.Config.TLSConfig; existingConfig != nil {
+		s.Config.TLSConfig = existingConfig.Clone()
+	} else {
+		s.Config.TLSConfig = new(tls.Config)
+	}
+	if s.Config.TLSConfig.NextProtos == nil {
+		s.Config.TLSConfig.NextProtos = []string{"ftp"}
+	}
+	if len(s.Config.TLSConfig.Certificates) == 0 {
+		s.Config.TLSConfig.Certificates = []tls.Certificate{cert}
+	}
 }
 
 // Close shuts down the server.
