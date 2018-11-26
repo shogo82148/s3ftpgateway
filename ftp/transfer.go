@@ -2,6 +2,7 @@ package ftp
 
 import (
 	"context"
+	"crypto/tls"
 	"net"
 	"sync"
 )
@@ -17,10 +18,13 @@ type passiveDataTransfer struct {
 	ch   <-chan net.Conn
 }
 
-func newPassiveDataTransfer() (*passiveDataTransfer, error) {
+func (c *ServerConn) newPassiveDataTransfer() (*passiveDataTransfer, error) {
 	l, err := net.Listen("tcp", ":0")
 	if err != nil {
 		return nil, err
+	}
+	if c.tls {
+		l = tls.NewListener(l, c.server.TLSConfig)
 	}
 	l = &onceCloseListener{Listener: l}
 	ch := make(chan net.Conn, 1)

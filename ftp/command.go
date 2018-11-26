@@ -302,7 +302,7 @@ func (commandEpsv) Execute(ctx context.Context, c *ServerConn, cmd *Command) {
 		c.dt = nil
 		dt.Close()
 	}
-	dt, err := newPassiveDataTransfer()
+	dt, err := c.newPassiveDataTransfer()
 	if err != nil {
 		c.WriteReply(&Reply{Code: 425, Messages: []string{"Data connection failed."}})
 		return
