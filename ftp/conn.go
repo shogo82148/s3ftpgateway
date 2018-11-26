@@ -13,6 +13,15 @@ import (
 	"github.com/sourcegraph/ctxvfs"
 )
 
+type protectionLevel byte
+
+const (
+	protectionLevelClear        protectionLevel = 'C'
+	protectionLevelSafe                         = 'S'
+	protectionLevelConfidential                 = 'E'
+	protectionLevelPrivate                      = 'P'
+)
+
 // ServerConn is a connection of the ftp server.
 type ServerConn struct {
 	server *Server
@@ -28,6 +37,9 @@ type ServerConn struct {
 
 	// TLS connection is enabled.
 	tls bool
+
+	// data channel protection level
+	prot protectionLevel
 
 	dt dataTransfer
 }

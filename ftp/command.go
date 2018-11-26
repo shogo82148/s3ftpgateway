@@ -93,6 +93,7 @@ var commands = map[string]command{
 	"ENC":  nil,
 	"MIC":  nil,
 	"PBSZ": commandPbsz{},
+	"PROT": commandProt{},
 
 	// Feature negotiation mechanism for the File Transfer Protocol
 	// https://tools.ietf.org/html/rfc2389
@@ -247,6 +248,31 @@ func (commandPbsz) Execute(ctx context.Context, c *ServerConn, cmd *Command) {
 		c.WriteReply(&Reply{Code: 200, Messages: []string{"OK"}})
 	} else {
 		c.WriteReply(&Reply{Code: 550, Messages: []string{"Action not taken."}})
+	}
+}
+
+// commandProt specify the data channel protection level.
+type commandProt struct{}
+
+func (commandProt) IsExtend() bool     { return true }
+func (commandProt) RequireParam() bool { return true }
+func (commandProt) RequireAuth() bool  { return false }
+
+func (commandProt) Execute(ctx context.Context, c *ServerConn, cmd *Command) {
+	switch cmd.Arg {
+	case "C": // Clear
+		c.prot = protectionLevelClear
+		c.WriteReply(&Reply{Code: 200, Messages: []string{"OK"}})
+	case "S": // Safe
+		c.WriteReply(&Reply{Code: 536, Messages: []string{"Safe level is not supported"}})
+	case "E": // Confidential
+		c.WriteReply(&Reply{Code: 536, Messages: []string{"Confidential level is not supported"}})
+	case "P": // Private
+		if c.tls {
+			c.WriteReply(&Reply{Code: 200, Messages: []string{"OK"}})
+		} else {
+			c.WriteReply(&Reply{Code: 536, Messages: []string{"Private level is only supported in TLS"}})
+		}
 	}
 }
 
