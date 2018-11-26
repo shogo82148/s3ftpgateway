@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"log"
 	"net"
+	"sync"
 
 	"github.com/sourcegraph/ctxvfs"
 )
@@ -17,11 +18,10 @@ type ServerConn struct {
 	server *Server
 
 	// connection for control
-	rwc  net.Conn
-	ctrl *dumbTelnetConn
-
-	chCmd   <-chan *Command
-	chReply chan<- *Reply
+	mu      sync.Mutex
+	rwc     net.Conn
+	ctrl    *dumbTelnetConn
+	scanner *bufio.Scanner
 
 	user string
 	auth *Authorization
@@ -30,51 +30,33 @@ type ServerConn struct {
 }
 
 func (c *ServerConn) serve(ctx context.Context) {
-	c.ctrl = newDumbTelnetConn(c.rwc, c.rwc)
 	ctx, cancel := context.WithCancel(ctx)
 	defer cancel()
 
-	chCmd := make(chan *Command, 1)
-	c.chCmd = chCmd
-	chReply := make(chan *Reply, 1)
-	c.chReply = chReply
-
-	go c.handleCommand(chCmd)
-	go c.handleReply(chReply)
+	// setup control channel
+	c.ctrl = newDumbTelnetConn(c.rwc, c.rwc)
+	c.scanner = bufio.NewScanner(c.ctrl)
 
 	defer c.close()
 
 	c.WriteReply(&Reply{Code: 220, Messages: []string{"Service ready"}})
 
-	for cmd := range c.chCmd {
-		if command, ok := commands[cmd.Name]; ok && command != nil {
-			command.Execute(ctx, c, cmd)
-		} else {
-			c.WriteReply(&Reply{Code: 500, Messages: []string{"Command not found"}})
-		}
-	}
-}
-
-func (c *ServerConn) handleCommand(chCmd chan<- *Command) {
-	s := bufio.NewScanner(c.ctrl)
-	for s.Scan() {
-		text := s.Text()
+	for c.scanner.Scan() {
+		text := c.scanner.Text()
 		log.Println(text)
 		cmd, err := ParseCommand(text)
 		if err != nil {
 			log.Println(err)
 			return
 		}
-		chCmd <- cmd
+		if command, ok := commands[cmd.Name]; ok && command != nil {
+			command.Execute(ctx, c, cmd)
+		} else {
+			c.WriteReply(&Reply{Code: 500, Messages: []string{"Command not found"}})
+		}
 	}
-	if err := s.Err(); err != nil {
+	if err := c.scanner.Err(); err != nil {
 		log.Println(err)
-	}
-}
-
-func (c *ServerConn) handleReply(chReply <-chan *Reply) {
-	for r := range chReply {
-		c.writeReply(r)
 	}
 }
 
@@ -102,7 +84,9 @@ func (r Reply) String() string {
 
 // WriteReply writes a ftp reply.
 func (c *ServerConn) WriteReply(r *Reply) {
-	c.chReply <- r
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	c.writeReply(r)
 }
 
 func (c *ServerConn) writeReply(r *Reply) (int, error) {
@@ -148,11 +132,17 @@ func (c *ServerConn) writeReply(r *Reply) (int, error) {
 }
 
 func (c *ServerConn) upgradeToTLS() error {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+
 	tlsConn := tls.Server(c.rwc, c.server.TLSConfig)
 	if err := tlsConn.Handshake(); err != nil {
 		return err
 	}
+
 	c.ctrl = newDumbTelnetConn(tlsConn, tlsConn)
+	c.scanner = bufio.NewScanner(c.ctrl)
+
 	return nil
 }
 

@@ -8,7 +8,6 @@ import (
 	"net"
 	"strconv"
 	"strings"
-	"time"
 )
 
 // Command is a ftp command.
@@ -229,9 +228,9 @@ func (commandAuth) RequireAuth() bool  { return false }
 func (commandAuth) Execute(ctx context.Context, c *ServerConn, cmd *Command) {
 	if !strings.EqualFold(cmd.Arg, "TLS") {
 		c.WriteReply(&Reply{Code: 550, Messages: []string{"Action not taken."}})
+		return
 	}
 	c.WriteReply(&Reply{Code: 234, Messages: []string{"AUTH command OK."}})
-	time.Sleep(time.Second) // TODO: remove me!!
 	if err := c.upgradeToTLS(); err != nil {
 		log.Println(err)
 	}
