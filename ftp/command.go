@@ -92,7 +92,7 @@ var commands = map[string]command{
 	"CONF": nil,
 	"ENC":  nil,
 	"MIC":  nil,
-	"PBSZ": nil,
+	"PBSZ": commandPbsz{},
 
 	// Feature negotiation mechanism for the File Transfer Protocol
 	// https://tools.ietf.org/html/rfc2389
@@ -233,6 +233,20 @@ func (commandAuth) Execute(ctx context.Context, c *ServerConn, cmd *Command) {
 	c.WriteReply(&Reply{Code: 234, Messages: []string{"AUTH command OK."}})
 	if err := c.upgradeToTLS(); err != nil {
 		log.Println(err)
+	}
+}
+
+type commandPbsz struct{}
+
+func (commandPbsz) IsExtend() bool     { return true }
+func (commandPbsz) RequireParam() bool { return true }
+func (commandPbsz) RequireAuth() bool  { return false }
+
+func (commandPbsz) Execute(ctx context.Context, c *ServerConn, cmd *Command) {
+	if c.tls && cmd.Arg == "0" {
+		c.WriteReply(&Reply{Code: 200, Messages: []string{"OK"}})
+	} else {
+		c.WriteReply(&Reply{Code: 550, Messages: []string{"Action not taken."}})
 	}
 }
 

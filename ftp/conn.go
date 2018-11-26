@@ -26,6 +26,9 @@ type ServerConn struct {
 	user string
 	auth *Authorization
 
+	// TLS connection is enabled.
+	tls bool
+
 	dt dataTransfer
 }
 
@@ -142,6 +145,7 @@ func (c *ServerConn) upgradeToTLS() error {
 
 	c.ctrl = newDumbTelnetConn(tlsConn, tlsConn)
 	c.scanner = bufio.NewScanner(c.ctrl)
+	c.tls = true
 
 	return nil
 }
