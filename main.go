@@ -59,7 +59,7 @@ func main() {
 			Certificates: []tls.Certificate{cert},
 		},
 	}
-	if err := s.ListenAndServe(); err != nil {
+	if err := s.ListenAndServeTLS("", ""); err != nil {
 		log.Fatal(err)
 	}
 }

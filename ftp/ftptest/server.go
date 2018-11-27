@@ -2,6 +2,7 @@ package ftptest
 
 import (
 	"crypto/tls"
+	"crypto/x509"
 	"flag"
 	"fmt"
 	"net"
@@ -43,6 +44,8 @@ type Server struct {
 	// Config may be changed after calling NewUnstartedServer and
 	// before Start or StartTLS.
 	Config *ftp.Server
+
+	certificate *x509.Certificate
 }
 
 // NewServer starts and returns a new Server.
@@ -50,6 +53,14 @@ type Server struct {
 func NewServer(vfs ctxvfs.FileSystem) *Server {
 	ts := NewUnstartedServer(vfs)
 	ts.Start()
+	return ts
+}
+
+// NewTLSServer starts and returns a new Server using TLS.
+// The caller should call Close when finished, to shut it down.
+func NewTLSServer(vfs ctxvfs.FileSystem) *Server {
+	ts := NewUnstartedServer(vfs)
+	ts.StartTLS()
 	return ts
 }
 
@@ -73,10 +84,21 @@ func (s *Server) Start() {
 	go s.Config.Serve(s.Listener)
 }
 
+// StartTLS starts TLS on a server from NewUnstartedServer.
+func (s *Server) StartTLS() {
+	if s.URL != "" {
+		panic("Server already started")
+	}
+	s.setupTLS()
+	s.Listener = tls.NewListener(s.Listener, s.Config.TLSConfig)
+	s.URL = "ftps://" + s.Listener.Addr().String()
+	go s.Config.Serve(s.Listener)
+}
+
 func (s *Server) setupTLS() {
 	cert, err := tls.X509KeyPair(internal.LocalhostCert, internal.LocalhostKey)
 	if err != nil {
-		panic(fmt.Sprintf("httptest: NewTLSServer: %v", err))
+		panic(fmt.Sprintf("ftptest: NewTLSServer: %v", err))
 	}
 
 	if existingConfig := s.Config.TLSConfig; existingConfig != nil {
@@ -90,6 +112,15 @@ func (s *Server) setupTLS() {
 	if len(s.Config.TLSConfig.Certificates) == 0 {
 		s.Config.TLSConfig.Certificates = []tls.Certificate{cert}
 	}
+	s.certificate, err = x509.ParseCertificate(s.Config.TLSConfig.Certificates[0].Certificate[0])
+	if err != nil {
+		panic(fmt.Sprintf("ftptest: NewTLSServer: %v", err))
+	}
+}
+
+// Certificate returns the certificate used by the server.
+func (s *Server) Certificate() *x509.Certificate {
+	return s.certificate
 }
 
 // Close shuts down the server.
