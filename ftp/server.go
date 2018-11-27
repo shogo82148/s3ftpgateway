@@ -35,6 +35,21 @@ func (s *Server) ListenAndServe() error {
 	return s.Serve(tcpKeepAliveListener{ln.(*net.TCPListener)})
 }
 
+// ListenAndServeTLS listens on the TCP network address srv.Addr and
+// then calls ServeTLS to handle requests on incoming TLS connections.
+func (s *Server) ListenAndServeTLS(certFile, keyFile string) error {
+	addr := s.Addr
+	if addr == "" {
+		addr = ":ftps"
+	}
+	ln, err := net.Listen("tcp", addr)
+	if err != nil {
+		return err
+	}
+	defer ln.Close()
+	return s.ServeTLS(tcpKeepAliveListener{ln.(*net.TCPListener)}, certFile, keyFile)
+}
+
 // Serve accepts incoming connections on the Listener l, creating a new service goroutine for each.
 func (s *Server) Serve(l net.Listener) error {
 	ctx := context.Background()
@@ -60,6 +75,27 @@ func (s *Server) Serve(l net.Listener) error {
 		c := s.newConn(rw)
 		go c.serve(ctx)
 	}
+}
+
+// ServeTLS accepts incoming connections on the Listener l, creating a
+// new service goroutine for each.
+func (s *Server) ServeTLS(l net.Listener, certFile, keyFile string) error {
+	config := s.TLSConfig.Clone()
+	if !strSliceContains(config.NextProtos, "ftp") {
+		config.NextProtos = append(config.NextProtos, "ftp")
+	}
+	configHasCert := len(config.Certificates) > 0 || config.GetCertificate != nil
+	if !configHasCert || certFile != "" || keyFile != "" {
+		var err error
+		config.Certificates = make([]tls.Certificate, 1)
+		config.Certificates[0], err = tls.LoadX509KeyPair(certFile, keyFile)
+		if err != nil {
+			return err
+		}
+	}
+
+	tlsListener := tls.NewListener(l, config)
+	return s.Serve(tlsListener)
 }
 
 func (s *Server) newConn(rwc net.Conn) *ServerConn {
@@ -99,4 +135,13 @@ func (ln tcpKeepAliveListener) Accept() (net.Conn, error) {
 	tc.SetKeepAlive(true)
 	tc.SetKeepAlivePeriod(3 * time.Minute)
 	return tc, nil
+}
+
+func strSliceContains(ss []string, s string) bool {
+	for _, v := range ss {
+		if v == s {
+			return true
+		}
+	}
+	return false
 }
