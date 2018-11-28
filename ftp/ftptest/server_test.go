@@ -6,6 +6,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"runtime"
 	"testing"
 
 	"github.com/shogo82148/s3ftpgateway/ftp/internal"
@@ -60,8 +61,16 @@ func TestServer_ExplicitTLS(t *testing.T) {
 		t.Fatal(err)
 	}
 
+	args := []string{ts.URL + "/testfile", "-s", "-v", "--ftp-ssl"}
+	if runtime.GOOS != "windows" {
+		args = append(args, "--cacert", cert)
+	} else {
+		// curl does not accpect --cacert option in windows, why???
+		args = append(args, "-k")
+	}
+
 	var stdout, stderr bytes.Buffer
-	cmd := exec.Command(curl, "-s", "-v", "--cacert", cert, "--ftp-ssl", ts.URL+"/testfile")
+	cmd := exec.Command(curl, args...)
 	cmd.Stdout = &stdout
 	cmd.Stderr = &stderr
 	if err := cmd.Run(); err != nil {
@@ -96,8 +105,16 @@ func TestServer_ImplictTLS(t *testing.T) {
 		t.Fatal(err)
 	}
 
+	args := []string{ts.URL + "/testfile", "-s", "-v", "--ftp-ssl"}
+	if runtime.GOOS != "windows" {
+		args = append(args, "--cacert", cert)
+	} else {
+		// curl does not accpect --cacert option in windows, why???
+		args = append(args, "-k")
+	}
+
 	var stdout, stderr bytes.Buffer
-	cmd := exec.Command(curl, "-s", "-v", "--cacert", cert, ts.URL+"/testfile")
+	cmd := exec.Command(curl, args...)
 	cmd.Stdout = &stdout
 	cmd.Stderr = &stderr
 	if err := cmd.Run(); err != nil {
