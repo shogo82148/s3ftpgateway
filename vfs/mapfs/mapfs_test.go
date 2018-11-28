@@ -203,3 +203,41 @@ func TestCreate(t *testing.T) {
 		t.Errorf("got %s, want Hello World", string(slurp))
 	}
 }
+
+func TestRemove(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	fs := New(map[string]string{
+		"foo/bar/three.txt": "a",
+		"foo/bar.txt":       "b",
+		"top.txt":           "c",
+		"other-top.txt":     "d",
+	})
+
+	if err := fs.Remove(ctx, "foo/bar.txt"); err != nil {
+		t.Error("unexpected error: ", err)
+	}
+
+	// it will fail because directory is not empty
+	err := fs.Remove(ctx, "foo/bar")
+	if err == nil || err.(*os.PathError).Err.Error() != "directory is not empty" {
+		t.Error("unexpected error: ", err)
+	}
+
+	// remove all
+	if err := fs.Remove(ctx, "foo/bar/three.txt"); err != nil {
+		t.Error("unexpected error: ", err)
+	}
+	if stat, err := fs.Lstat(ctx, "foo/bar"); err != nil || !stat.IsDir() {
+		t.Error("want path `foo/bar` is directory, but not")
+	}
+	if err := fs.Remove(ctx, "foo/bar"); err != nil {
+		t.Error("unexpected error: ", err)
+	}
+
+	// "foo/bar" is already moved, so it fails
+	if err := fs.Remove(ctx, "foo/bar"); !os.IsNotExist(err) {
+		t.Error("unexpected error: ", err)
+	}
+}

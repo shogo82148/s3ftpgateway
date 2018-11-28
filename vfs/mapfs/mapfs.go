@@ -244,12 +244,44 @@ func (w *writer) Close() error {
 // Mkdir creates a new directory. If name is already a directory, Mkdir
 // returns an error (that can be detected using os.IsExist).
 func (fs *mapFS) Mkdir(ctx context.Context, name string) error {
+	fs.mu.Lock()
+	defer fs.mu.Unlock()
+	fs.m[filename(name)+"/"] = ""
 	return nil
 }
 
-// Remove removes the named file or directory.
+// Remove removes the named file or (empty) directory.
 func (fs *mapFS) Remove(ctx context.Context, name string) error {
-	return nil
+	fs.mu.Lock()
+	defer fs.mu.Unlock()
+	name = filename(name)
+
+	// try to remove file
+	if _, ok := fs.m[name]; ok {
+		delete(fs.m, name)
+		dir := pathpkg.Dir(name)
+		if dir != "." {
+			fs.m[dir+"/"] = ""
+		}
+		return nil
+	}
+
+	nameslash := name + "/"
+	if _, ok := fs.m[nameslash]; ok {
+		delete(fs.m, nameslash)
+		dir := pathpkg.Dir(name)
+		if dir != "." {
+			fs.m[dir+"/"] = ""
+		}
+		return nil
+	}
+
+	for fn := range fs.m {
+		if strings.HasPrefix(fn, nameslash) {
+			return &os.PathError{Op: "remove", Path: name, Err: errors.New("directory is not empty")}
+		}
+	}
+	return os.ErrNotExist
 }
 
 // mapFI is the map-based implementation of FileInfo.
