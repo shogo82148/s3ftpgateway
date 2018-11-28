@@ -53,6 +53,47 @@ func TestOpen(t *testing.T) {
 	}
 }
 
+func TestLstat(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	fs := New(map[string]string{
+		"foo/bar/three.txt": "333",
+		"foo/bar.txt":       "22",
+		"top.txt":           "top.txt file",
+		"other-top.txt":     "other-top.txt file",
+	})
+	tests := []struct {
+		path string
+		want os.FileInfo
+	}{
+		{
+			path: "foo",
+			want: mapFI{name: "foo", dir: true},
+		},
+		{
+			path: "foo/bar.txt",
+			want: mapFI{name: "bar.txt", size: 2},
+		},
+	}
+	for _, tt := range tests {
+		fis, err := fs.Lstat(ctx, tt.path)
+		if err != nil {
+			t.Errorf("Lstat(%q) = %v", tt.path, err)
+			continue
+		}
+		if !reflect.DeepEqual(fis, tt.want) {
+			t.Errorf("Lstat(%q) = %#v; want %#v", tt.path, fis, tt.want)
+			continue
+		}
+	}
+
+	_, err := fs.ReadDir(ctx, "/xxxx")
+	if !os.IsNotExist(err) {
+		t.Errorf("Lstat /xxxx = %v; want os.IsNotExist error", err)
+	}
+}
+
 func TestReaddir(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()

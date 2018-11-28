@@ -56,7 +56,25 @@ func dirInfo(name string) os.FileInfo {
 
 // Lstat returns a FileInfo describing the named file.
 func (fs *mapFS) Lstat(ctx context.Context, path string) (os.FileInfo, error) {
-	return nil, nil
+	path = filename(path)
+
+	fs.mu.RLock()
+	defer fs.mu.RUnlock()
+
+	b, ok := fs.m[path]
+	if ok {
+		return fileInfo(path, b), nil
+	}
+	pathslash := path + "/"
+	if _, ok := fs.m[pathslash]; ok {
+		return dirInfo(path), nil
+	}
+	for fn := range fs.m {
+		if strings.HasPrefix(fn, pathslash) {
+			return dirInfo(path), nil
+		}
+	}
+	return nil, os.ErrNotExist
 }
 
 // Stat returns a FileInfo describing the named file. If there is an error, it will be of type *PathError.
@@ -77,14 +95,9 @@ func slashdir(p string) string {
 	return "/" + d
 }
 
-// ReadDir reads the contents of the directory.
-func (fs *mapFS) ReadDir(ctx context.Context, path string) ([]os.FileInfo, error) {
-	path = pathpkg.Clean(path)
+func (fs *mapFS) readDir(path string) ([]string, map[string]os.FileInfo) {
 	var ents []string
 	fim := make(map[string]os.FileInfo) // base -> fi
-
-	fs.mu.RLock()
-	defer fs.mu.RUnlock()
 
 	for fn, b := range fs.m {
 		dir := slashdir(fn)
@@ -116,6 +129,17 @@ func (fs *mapFS) ReadDir(ctx context.Context, path string) ([]os.FileInfo, error
 			}
 		}
 	}
+	return ents, fim
+}
+
+// ReadDir reads the contents of the directory.
+func (fs *mapFS) ReadDir(ctx context.Context, path string) ([]os.FileInfo, error) {
+	path = pathpkg.Clean(path)
+
+	fs.mu.RLock()
+	defer fs.mu.RUnlock()
+
+	ents, fim := fs.readDir(path)
 	if len(ents) == 0 {
 		return nil, os.ErrNotExist
 	}
