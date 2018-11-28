@@ -46,7 +46,7 @@ type ReadSeekCloser interface {
 
 // A WriteSeekCloser can Write, Seek, and Close.
 type WriteSeekCloser interface {
-	io.Reader
+	io.Writer
 	io.Seeker
 	io.Closer
 }

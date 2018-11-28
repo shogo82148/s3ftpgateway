@@ -2,6 +2,7 @@ package mapfs
 
 import (
 	"context"
+	"io"
 	"io/ioutil"
 	"os"
 	"reflect"
@@ -152,5 +153,53 @@ func TestReaddir(t *testing.T) {
 	_, err := fs.ReadDir(ctx, "/xxxx")
 	if !os.IsNotExist(err) {
 		t.Errorf("ReadDir /xxxx = %v; want os.IsNotExist error", err)
+	}
+}
+
+func TestCreate(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	// Create new file
+	fs := New(map[string]string{})
+	w, err := fs.Create(ctx, "foobar.txt")
+	if err != nil {
+		t.Fatal("unexpected error: ", err)
+	}
+	n, err := io.WriteString(w, "hello")
+	if err != nil {
+		t.Fatal("unexpected error: ", err)
+	}
+	if n != len("hello") {
+		t.Errorf("got %d, want %d", n, len("hello"))
+	}
+
+	// Seek
+	if n, err := w.Seek(0, io.SeekStart); err != nil {
+		t.Fatal("unexpected error: ", err)
+	} else if n != 0 {
+		t.Errorf("got %d, want %d", n, 0)
+	}
+	io.WriteString(w, "H")
+
+	if n, err := w.Seek(0, io.SeekEnd); err != nil {
+		t.Fatal("unexpected error: ", err)
+	} else if n != int64(len("hello")) {
+		t.Errorf("got %d, want %d", n, len("hello"))
+	}
+	io.WriteString(w, " World")
+
+	if err := w.Close(); err != nil {
+		t.Fatal("unexpected error: ", err)
+	}
+
+	// Check the content of th file.
+	r, err := fs.Open(ctx, "foobar.txt")
+	slurp, err := ioutil.ReadAll(r)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if string(slurp) != "Hello World" {
+		t.Errorf("got %s, want Hello World", string(slurp))
 	}
 }
