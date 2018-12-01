@@ -279,7 +279,13 @@ func (fs *mapFS) Remove(ctx context.Context, name string) error {
 		return nil
 	}
 
+	// try to remove directory
 	nameslash := name + "/"
+	for fn := range fs.m {
+		if fn != nameslash && strings.HasPrefix(fn, nameslash) {
+			return &os.PathError{Op: "remove", Path: name, Err: errors.New("directory is not empty")}
+		}
+	}
 	if _, ok := fs.m[nameslash]; ok {
 		delete(fs.m, nameslash)
 		dir := pathpkg.Dir(name)
@@ -287,12 +293,6 @@ func (fs *mapFS) Remove(ctx context.Context, name string) error {
 			fs.m[dir+"/"] = ""
 		}
 		return nil
-	}
-
-	for fn := range fs.m {
-		if strings.HasPrefix(fn, nameslash) {
-			return &os.PathError{Op: "remove", Path: name, Err: errors.New("directory is not empty")}
-		}
 	}
 	return os.ErrNotExist
 }

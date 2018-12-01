@@ -239,6 +239,7 @@ func TestRemove(t *testing.T) {
 	defer cancel()
 
 	fs := New(map[string]string{
+		"foo/bar/":          "",
 		"foo/bar/three.txt": "a",
 		"foo/bar.txt":       "b",
 		"top.txt":           "c",
