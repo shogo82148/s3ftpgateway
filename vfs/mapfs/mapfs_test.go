@@ -204,6 +204,36 @@ func TestCreate(t *testing.T) {
 	}
 }
 
+func TestMkdir(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	t.Run("success", func(t *testing.T) {
+		fs := New(map[string]string{})
+		if err := fs.Mkdir(ctx, "foo"); err != nil {
+			t.Error("unexpected error: ", err)
+		}
+	})
+
+	t.Run("dir-already-exists", func(t *testing.T) {
+		fs := New(map[string]string{
+			"foo/": "",
+		})
+		if err := fs.Mkdir(ctx, "foo"); err == nil || !os.IsExist(err) {
+			t.Errorf("want exist, got %v", err)
+		}
+	})
+
+	t.Run("file-already-exists", func(t *testing.T) {
+		fs := New(map[string]string{
+			"foo": "a",
+		})
+		if err := fs.Mkdir(ctx, "foo"); err == nil || !os.IsExist(err) {
+			t.Errorf("want exist, got %v", err)
+		}
+	})
+}
+
 func TestRemove(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()

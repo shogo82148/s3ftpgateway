@@ -246,7 +246,20 @@ func (w *writer) Close() error {
 func (fs *mapFS) Mkdir(ctx context.Context, name string) error {
 	fs.mu.Lock()
 	defer fs.mu.Unlock()
-	fs.m[filename(name)+"/"] = ""
+	name = filename(name)
+	if _, ok := fs.m[name]; ok {
+		return os.ErrExist
+	}
+	nameslash := name + "/"
+	if _, ok := fs.m[nameslash]; ok {
+		return os.ErrExist
+	}
+	for fn := range fs.m {
+		if strings.HasPrefix(fn, nameslash) {
+			return os.ErrExist
+		}
+	}
+	fs.m[name+"/"] = ""
 	return nil
 }
 
