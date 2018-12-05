@@ -125,5 +125,32 @@ func TestLstat(t *testing.T) {
 		if info.Size() != 6 {
 			t.Errorf("want 6, got %d", info.Size())
 		}
+		if info.IsDir() {
+			t.Error("want not dirctory, but it is")
+		}
+	})
+
+	t.Run("found-dir", func(t *testing.T) {
+		req := fs.s3().PutObjectRequest(&s3.PutObjectInput{
+			Bucket: aws.String(fs.Bucket),
+			Key:    aws.String(fmt.Sprintf("%s/bar/foo.txt", fs.Prefix)),
+			Body:   strings.NewReader("abc123"),
+		})
+		req.SetContext(ctx)
+		if _, err := req.Send(); err != nil {
+			t.Error(err)
+			return
+		}
+		info, err := fs.Lstat(ctx, "bar")
+		if err != nil {
+			t.Error(err)
+			return
+		}
+		if info.Name() != "bar" {
+			t.Errorf("want foo.txt, got %s", info.Name())
+		}
+		if !info.IsDir() {
+			t.Error("want dirctory, but it is not")
+		}
 	})
 }

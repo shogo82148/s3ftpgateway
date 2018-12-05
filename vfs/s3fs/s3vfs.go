@@ -133,6 +133,32 @@ func (h headoutput) Sys() interface{} {
 	return h.resp
 }
 
+type dirinfo struct {
+	path string
+}
+
+func (h dirinfo) Name() string {
+	return pathpkg.Base(h.path)
+}
+
+func (h dirinfo) Size() int64 {
+	return 0
+}
+func (h dirinfo) Mode() os.FileMode {
+	return 0755 | os.ModeDir
+}
+func (h dirinfo) ModTime() time.Time {
+	return time.Time{}
+}
+
+func (h dirinfo) IsDir() bool {
+	return true
+}
+
+func (h dirinfo) Sys() interface{} {
+	return nil
+}
+
 // Lstat returns a FileInfo describing the named file.
 func (fs *FileSystem) Lstat(ctx context.Context, path string) (os.FileInfo, error) {
 	svc := fs.s3()
@@ -144,6 +170,19 @@ func (fs *FileSystem) Lstat(ctx context.Context, path string) (os.FileInfo, erro
 	req.SetContext(ctx)
 	resp, err := req.Send()
 	if err != nil {
+		// Search directory
+		req := svc.ListObjectsV2Request(&s3.ListObjectsV2Input{
+			Bucket:    aws.String(fs.Bucket),
+			Prefix:    aws.String(pathpkg.Join(fs.Prefix, path) + "/"),
+			Delimiter: aws.String("/"),
+			MaxKeys:   aws.Int64(1),
+		})
+		req.SetContext(ctx)
+		resp, err2 := req.Send()
+		if err2 == nil && aws.Int64Value(resp.KeyCount) != 0 {
+			return dirinfo{path: path}, nil
+		}
+
 		if err, ok := err.(awserr.RequestFailure); ok {
 			switch err.StatusCode() {
 			case http.StatusNotFound:
