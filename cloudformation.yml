@@ -30,6 +30,12 @@ Resources:
             - "s3:*"
             Resource:
             - !Sub "${TestBucket.Arn}/*"
+          - Effect: Allow
+            Action:
+            - "s3:Get*"
+            - "s3:List*"
+            Resource:
+            - !Sub "${TestBucket.Arn}"
   TestUserAccessKey:
     Type: AWS::IAM::AccessKey
     DependsOn: TestUser
