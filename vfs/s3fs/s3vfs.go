@@ -2,7 +2,8 @@ package s3fs
 
 import (
 	"context"
-	"log"
+	"io"
+	"io/ioutil"
 	"net/http"
 	"os"
 	pathpkg "path"
@@ -40,6 +41,16 @@ func (fs *FileSystem) s3() s3iface.S3API {
 	return fs.s3api
 }
 
+type file struct {
+	*os.File
+}
+
+func (f *file) Close() error {
+	err := f.File.Close()
+	os.Remove(f.File.Name())
+	return err
+}
+
 // Open opens the file.
 func (fs *FileSystem) Open(ctx context.Context, name string) (vfs.ReadSeekCloser, error) {
 	svc := fs.s3()
@@ -70,8 +81,28 @@ func (fs *FileSystem) Open(ctx context.Context, name string) (vfs.ReadSeekCloser
 		}
 		return nil, err
 	}
-	log.Println(resp)
-	return nil, nil
+	defer resp.Body.Close()
+
+	tmp, err := ioutil.TempFile("", "s3fs_")
+	if err != nil {
+		return nil, err
+	}
+	f := &file{
+		File: tmp,
+	}
+	defer func() {
+		if err != nil {
+			f.Close()
+		}
+	}()
+
+	if _, err := io.Copy(tmp, resp.Body); err != nil {
+		return nil, err
+	}
+	if _, err := tmp.Seek(0, io.SeekStart); err != nil {
+		return nil, err
+	}
+	return f, nil
 }
 
 // Lstat returns a FileInfo describing the named file.

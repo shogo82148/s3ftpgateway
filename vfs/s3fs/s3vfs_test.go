@@ -4,10 +4,15 @@ import (
 	"context"
 	"crypto/rand"
 	"encoding/hex"
+	"fmt"
+	"io/ioutil"
 	"os"
+	"strings"
 	"testing"
 
+	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/aws/external"
+	"github.com/aws/aws-sdk-go-v2/service/s3"
 	"github.com/shogo82148/s3ftpgateway/vfs"
 )
 
@@ -53,6 +58,33 @@ func TestOpen(t *testing.T) {
 		_, err := fs.Open(ctx, "not-fount")
 		if err == nil || !os.IsNotExist(err) {
 			t.Errorf("unexpected error: %v", err)
+		}
+	})
+
+	t.Run("found", func(t *testing.T) {
+		req := fs.s3().PutObjectRequest(&s3.PutObjectInput{
+			Bucket: aws.String(fs.Bucket),
+			Key:    aws.String(fmt.Sprintf("%s/foo.txt", fs.Prefix)),
+			Body:   strings.NewReader("abc123"),
+		})
+		req.SetContext(ctx)
+		if _, err := req.Send(); err != nil {
+			t.Error(err)
+			return
+		}
+		f, err := fs.Open(ctx, "foo.txt")
+		if err != nil {
+			t.Error(err)
+			return
+		}
+		defer f.Close()
+		b, err := ioutil.ReadAll(f)
+		if err != nil {
+			t.Error(err)
+			return
+		}
+		if string(b) != "abc123" {
+			t.Errorf("want abc123, got %s", string(b))
 		}
 	})
 }
