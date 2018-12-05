@@ -9,6 +9,7 @@ import (
 	pathpkg "path"
 	"strings"
 	"sync"
+	"time"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/aws/awserr"
@@ -105,14 +106,72 @@ func (fs *FileSystem) Open(ctx context.Context, name string) (vfs.ReadSeekCloser
 	return f, nil
 }
 
+type headoutput struct {
+	path string
+	resp *s3.HeadObjectOutput
+}
+
+func (h headoutput) Name() string {
+	return pathpkg.Base(h.path)
+}
+
+func (h headoutput) Size() int64 {
+	return aws.Int64Value(h.resp.ContentLength)
+}
+func (h headoutput) Mode() os.FileMode {
+	return 0444
+}
+func (h headoutput) ModTime() time.Time {
+	return aws.TimeValue(h.resp.LastModified)
+}
+
+func (h headoutput) IsDir() bool {
+	return false
+}
+
+func (h headoutput) Sys() interface{} {
+	return h.resp
+}
+
 // Lstat returns a FileInfo describing the named file.
 func (fs *FileSystem) Lstat(ctx context.Context, path string) (os.FileInfo, error) {
-	return nil, nil
+	svc := fs.s3()
+	path = filename(path)
+	req := svc.HeadObjectRequest(&s3.HeadObjectInput{
+		Bucket: aws.String(fs.Bucket),
+		Key:    aws.String(pathpkg.Join(fs.Prefix, path)),
+	})
+	req.SetContext(ctx)
+	resp, err := req.Send()
+	if err != nil {
+		if err, ok := err.(awserr.RequestFailure); ok {
+			switch err.StatusCode() {
+			case http.StatusNotFound:
+				return nil, &os.PathError{
+					Op:   "stat",
+					Path: path,
+					Err:  os.ErrNotExist,
+				}
+			case http.StatusForbidden:
+				return nil, &os.PathError{
+					Op:   "stat",
+					Path: path,
+					Err:  os.ErrPermission,
+				}
+			}
+			return nil, err
+		}
+		return nil, err
+	}
+	return headoutput{
+		path: path,
+		resp: resp,
+	}, nil
 }
 
 // Stat returns a FileInfo describing the named file. If there is an error, it will be of type *PathError.
 func (fs *FileSystem) Stat(ctx context.Context, path string) (os.FileInfo, error) {
-	return nil, nil
+	return fs.Lstat(ctx, path)
 }
 
 // ReadDir reads the contents of the directory.

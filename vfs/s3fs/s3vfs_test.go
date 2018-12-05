@@ -88,3 +88,42 @@ func TestOpen(t *testing.T) {
 		}
 	})
 }
+
+func TestLstat(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	fs, cleanup := newTestFileSystem(t)
+	defer cleanup()
+
+	t.Run("not-found", func(t *testing.T) {
+		_, err := fs.Lstat(ctx, "not-fount")
+		if err == nil || !os.IsNotExist(err) {
+			t.Errorf("unexpected error: %v", err)
+		}
+	})
+
+	t.Run("found-file", func(t *testing.T) {
+		req := fs.s3().PutObjectRequest(&s3.PutObjectInput{
+			Bucket: aws.String(fs.Bucket),
+			Key:    aws.String(fmt.Sprintf("%s/foo.txt", fs.Prefix)),
+			Body:   strings.NewReader("abc123"),
+		})
+		req.SetContext(ctx)
+		if _, err := req.Send(); err != nil {
+			t.Error(err)
+			return
+		}
+		info, err := fs.Lstat(ctx, "foo.txt")
+		if err != nil {
+			t.Error(err)
+			return
+		}
+		if info.Name() != "foo.txt" {
+			t.Errorf("want foo.txt, got %s", info.Name())
+		}
+		if info.Size() != 6 {
+			t.Errorf("want 6, got %d", info.Size())
+		}
+	})
+}
