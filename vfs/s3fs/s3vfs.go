@@ -213,9 +213,69 @@ func (fs *FileSystem) Stat(ctx context.Context, path string) (os.FileInfo, error
 	return fs.Lstat(ctx, path)
 }
 
+type object struct {
+	obj s3.Object
+}
+
+func (obj object) Name() string {
+	return pathpkg.Base(aws.StringValue(obj.obj.Key))
+}
+
+func (obj object) Size() int64 {
+	return aws.Int64Value(obj.obj.Size)
+}
+func (obj object) Mode() os.FileMode {
+	return 0444
+}
+func (obj object) ModTime() time.Time {
+	return aws.TimeValue(obj.obj.LastModified)
+}
+
+func (obj object) IsDir() bool {
+	return false
+}
+
+func (obj object) Sys() interface{} {
+	return obj.obj
+}
+
 // ReadDir reads the contents of the directory.
 func (fs *FileSystem) ReadDir(ctx context.Context, path string) ([]os.FileInfo, error) {
-	return nil, nil
+	svc := fs.s3()
+	path = filename(path)
+	req := svc.ListObjectsV2Request(&s3.ListObjectsV2Input{
+		Bucket:    aws.String(fs.Bucket),
+		Prefix:    aws.String(pathpkg.Join(fs.Prefix, path+"/")),
+		Delimiter: aws.String("/"),
+	})
+	req.SetContext(ctx)
+	resp, err := req.Send()
+	if err != nil {
+		if err, ok := err.(awserr.RequestFailure); ok {
+			switch err.StatusCode() {
+			case http.StatusNotFound:
+				return nil, &os.PathError{
+					Op:   "readdir",
+					Path: path,
+					Err:  os.ErrNotExist,
+				}
+			case http.StatusForbidden:
+				return nil, &os.PathError{
+					Op:   "readdir",
+					Path: path,
+					Err:  os.ErrPermission,
+				}
+			}
+			return nil, err
+		}
+		return nil, err
+	}
+
+	res := make([]os.FileInfo, 0, int(aws.Int64Value(resp.KeyCount)))
+	for _, obj := range resp.Contents {
+		res = append(res, object{obj: obj})
+	}
+	return res, nil
 }
 
 // Create creates the named file, truncating it if it already exists.

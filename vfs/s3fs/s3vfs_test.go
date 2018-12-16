@@ -154,3 +154,45 @@ func TestLstat(t *testing.T) {
 		}
 	})
 }
+
+func TestReadDir(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	fs, cleanup := newTestFileSystem(t)
+	defer cleanup()
+
+	t.Run("found-file", func(t *testing.T) {
+		// add test objects
+		req := fs.s3().PutObjectRequest(&s3.PutObjectInput{
+			Bucket: aws.String(fs.Bucket),
+			Key:    aws.String(fmt.Sprintf("%s/bar/foo.txt", fs.Prefix)),
+			Body:   strings.NewReader("abc123"),
+		})
+		req.SetContext(ctx)
+		if _, err := req.Send(); err != nil {
+			t.Error(err)
+			return
+		}
+		req = fs.s3().PutObjectRequest(&s3.PutObjectInput{
+			Bucket: aws.String(fs.Bucket),
+			Key:    aws.String(fmt.Sprintf("%s/foobar.txt", fs.Prefix)),
+			Body:   strings.NewReader("abc123"),
+		})
+		req.SetContext(ctx)
+		if _, err := req.Send(); err != nil {
+			t.Error(err)
+			return
+		}
+
+		list, err := fs.ReadDir(ctx, "")
+		if err != nil {
+			t.Error(err)
+			return
+		}
+		t.Log(list)
+		if list[0].Name() != "bar" {
+			t.Errorf("want bar, got %s", list[0].Name())
+		}
+	})
+}
