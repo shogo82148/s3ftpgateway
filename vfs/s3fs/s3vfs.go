@@ -374,6 +374,15 @@ func (fs *FileSystem) Mkdir(ctx context.Context, name string) error {
 
 // Remove removes the named file or directory.
 func (fs *FileSystem) Remove(ctx context.Context, name string) error {
+	svc := fs.s3()
+	req := svc.DeleteObjectRequest(&s3.DeleteObjectInput{
+		Bucket: aws.String(fs.Bucket),
+		Key:    aws.String(fs.filekey(name)),
+	})
+	req.SetContext(ctx)
+	if _, err := req.Send(); err != nil {
+		return err
+	}
 	return nil
 }
 

@@ -372,3 +372,28 @@ func TestMkdir(t *testing.T) {
 		}
 	})
 }
+
+func TestRemove(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	t.Run("success", func(t *testing.T) {
+		fs, cleanup := newTestFileSystem(t)
+		defer cleanup()
+
+		req := fs.s3().PutObjectRequest(&s3.PutObjectInput{
+			Bucket: aws.String(fs.Bucket),
+			Key:    aws.String(fmt.Sprintf("%s/foobar.txt", fs.Prefix)),
+			Body:   strings.NewReader("abc123"),
+		})
+		req.SetContext(ctx)
+		if _, err := req.Send(); err != nil {
+			t.Error(err)
+			return
+		}
+
+		if err := fs.Remove(ctx, "foobar.txt"); err != nil {
+			t.Fatal(err)
+		}
+	})
+}
