@@ -5,6 +5,7 @@ import (
 	"crypto/rand"
 	"encoding/hex"
 	"fmt"
+	"io"
 	"io/ioutil"
 	"os"
 	"strings"
@@ -211,4 +212,42 @@ func TestReadDir(t *testing.T) {
 			t.Errorf("want foobar.txt, got %s", list[1].Name())
 		}
 	})
+}
+
+func TestCreate(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	fs, cleanup := newTestFileSystem(t)
+	defer cleanup()
+
+	w, err := fs.Create(ctx, "foobar.txt")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := io.WriteString(w, "abc123"); err != nil {
+		t.Fatal(err)
+	}
+	if err := w.Close(); err != nil {
+		t.Fatal(err)
+	}
+
+	req := fs.s3().GetObjectRequest(&s3.GetObjectInput{
+		Bucket: aws.String(fs.Bucket),
+		Key:    aws.String(fmt.Sprintf("%s/foobar.txt", fs.Prefix)),
+	})
+	req.SetContext(ctx)
+	resp, err := req.Send()
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer resp.Body.Close()
+
+	ret, err := ioutil.ReadAll(resp.Body)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if string(ret) != "abc123" {
+		t.Errorf("want abc123, got %s", string(ret))
+	}
 }

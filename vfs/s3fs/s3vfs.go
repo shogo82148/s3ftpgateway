@@ -42,11 +42,11 @@ func (fs *FileSystem) s3() s3iface.S3API {
 	return fs.s3api
 }
 
-type file struct {
+type fileReader struct {
 	*os.File
 }
 
-func (f *file) Close() error {
+func (f *fileReader) Close() error {
 	err := f.File.Close()
 	os.Remove(f.File.Name())
 	return err
@@ -88,7 +88,7 @@ func (fs *FileSystem) Open(ctx context.Context, name string) (vfs.ReadSeekCloser
 	if err != nil {
 		return nil, err
 	}
-	f := &file{
+	f := &fileReader{
 		File: tmp,
 	}
 	defer func() {
@@ -326,9 +326,48 @@ func (fs *FileSystem) ReadDir(ctx context.Context, path string) ([]os.FileInfo, 
 	return res, nil
 }
 
+type fileWriter struct {
+	*os.File
+	ctx  context.Context
+	fs   *FileSystem
+	name string
+}
+
+func (f *fileWriter) Close() error {
+	defer os.Remove(f.File.Name())
+
+	if _, err := f.File.Seek(0, io.SeekStart); err != nil {
+		f.File.Close()
+		return err
+	}
+	svc := f.fs.s3()
+	name := filename(f.name)
+	req := svc.PutObjectRequest(&s3.PutObjectInput{
+		Bucket: aws.String(f.fs.Bucket),
+		Key:    aws.String(pathpkg.Join(f.fs.Prefix, name)),
+		Body:   f.File,
+	})
+	req.SetContext(f.ctx)
+	if _, err := req.Send(); err != nil {
+		f.File.Close()
+		return err
+	}
+	return f.File.Close()
+}
+
 // Create creates the named file, truncating it if it already exists.
 func (fs *FileSystem) Create(ctx context.Context, name string) (vfs.WriteSeekCloser, error) {
-	return nil, nil
+	tmp, err := ioutil.TempFile("", "s3fs_")
+	if err != nil {
+		return nil, err
+	}
+	f := &fileWriter{
+		File: tmp,
+		ctx:  ctx,
+		fs:   fs,
+		name: name,
+	}
+	return f, nil
 }
 
 // Mkdir creates a new directory. If name is already a directory, Mkdir
