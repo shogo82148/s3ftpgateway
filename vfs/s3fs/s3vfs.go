@@ -373,6 +373,18 @@ func (fs *FileSystem) Create(ctx context.Context, name string) (vfs.WriteSeekClo
 // Mkdir creates a new directory. If name is already a directory, Mkdir
 // returns an error (that can be detected using os.IsExist).
 func (fs *FileSystem) Mkdir(ctx context.Context, name string) error {
+	name = filename(name)
+	name = strings.TrimPrefix(pathpkg.Join(fs.Prefix, name)+"/", "/")
+	svc := fs.s3()
+	req := svc.PutObjectRequest(&s3.PutObjectInput{
+		Bucket: aws.String(fs.Bucket),
+		Key:    aws.String(name),
+		Body:   strings.NewReader(""),
+	})
+	req.SetContext(ctx)
+	if _, err := req.Send(); err != nil {
+		return err
+	}
 	return nil
 }
 

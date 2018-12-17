@@ -251,3 +251,28 @@ func TestCreate(t *testing.T) {
 		t.Errorf("want abc123, got %s", string(ret))
 	}
 }
+
+func TestMkdir(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	t.Run("success", func(t *testing.T) {
+		fs, cleanup := newTestFileSystem(t)
+		defer cleanup()
+
+		if err := fs.Mkdir(ctx, "foobar"); err != nil {
+			t.Fatal(err)
+		}
+
+		req := fs.s3().GetObjectRequest(&s3.GetObjectInput{
+			Bucket: aws.String(fs.Bucket),
+			Key:    aws.String(fmt.Sprintf("%s/foobar/", fs.Prefix)),
+		})
+		req.SetContext(ctx)
+		resp, err := req.Send()
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer resp.Body.Close()
+	})
+}
