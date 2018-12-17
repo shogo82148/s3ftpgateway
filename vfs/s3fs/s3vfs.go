@@ -120,82 +120,25 @@ func (fs *FileSystem) Open(ctx context.Context, name string) (vfs.ReadSeekCloser
 	return f, nil
 }
 
-type headoutput struct {
-	path string
-	resp *s3.HeadObjectOutput
-}
-
-func (h headoutput) Name() string {
-	return pathpkg.Base(h.path)
-}
-
-func (h headoutput) Size() int64 {
-	return aws.Int64Value(h.resp.ContentLength)
-}
-func (h headoutput) Mode() os.FileMode {
-	return 0444
-}
-func (h headoutput) ModTime() time.Time {
-	return aws.TimeValue(h.resp.LastModified)
-}
-
-func (h headoutput) IsDir() bool {
-	return false
-}
-
-func (h headoutput) Sys() interface{} {
-	return h.resp
-}
-
-type dirinfo struct {
-	path string
-}
-
-func (h dirinfo) Name() string {
-	return pathpkg.Base(h.path)
-}
-
-func (h dirinfo) Size() int64 {
-	return 0
-}
-func (h dirinfo) Mode() os.FileMode {
-	return 0755 | os.ModeDir
-}
-func (h dirinfo) ModTime() time.Time {
-	return time.Time{}
-}
-
-func (h dirinfo) IsDir() bool {
-	return true
-}
-
-func (h dirinfo) Sys() interface{} {
-	return nil
-}
-
 // Lstat returns a FileInfo describing the named file.
 func (fs *FileSystem) Lstat(ctx context.Context, path string) (os.FileInfo, error) {
+	if path == "" {
+		return commonPrefix{s3.CommonPrefix{
+			Prefix: aws.String(""),
+		}}, nil
+	}
+
 	svc := fs.s3()
-	req := svc.HeadObjectRequest(&s3.HeadObjectInput{
-		Bucket: aws.String(fs.Bucket),
-		Key:    aws.String(fs.filekey(path)),
+	file := fs.filekey(path)
+	req := svc.ListObjectsV2Request(&s3.ListObjectsV2Input{
+		Bucket:    aws.String(fs.Bucket),
+		Prefix:    aws.String(file),
+		Delimiter: aws.String("/"),
+		MaxKeys:   aws.Int64(1),
 	})
 	req.SetContext(ctx)
 	resp, err := req.Send()
 	if err != nil {
-		// Search directory
-		req := svc.ListObjectsV2Request(&s3.ListObjectsV2Input{
-			Bucket:    aws.String(fs.Bucket),
-			Prefix:    aws.String(fs.dirkey(path)),
-			Delimiter: aws.String("/"),
-			MaxKeys:   aws.Int64(1),
-		})
-		req.SetContext(ctx)
-		resp, err2 := req.Send()
-		if err2 == nil && aws.Int64Value(resp.KeyCount) != 0 {
-			return dirinfo{path: path}, nil
-		}
-
 		if err, ok := err.(awserr.RequestFailure); ok {
 			switch err.StatusCode() {
 			case http.StatusNotFound:
@@ -215,10 +158,17 @@ func (fs *FileSystem) Lstat(ctx context.Context, path string) (os.FileInfo, erro
 		}
 		return nil, err
 	}
-	return headoutput{
-		path: path,
-		resp: resp,
-	}, nil
+	if len(resp.CommonPrefixes) > 0 && aws.StringValue(resp.CommonPrefixes[0].Prefix) == file+"/" {
+		return commonPrefix{resp.CommonPrefixes[0]}, nil
+	}
+	if len(resp.Contents) > 0 && aws.StringValue(resp.Contents[0].Key) == file {
+		return object{resp.Contents[0]}, nil
+	}
+	return nil, &os.PathError{
+		Op:   "stat",
+		Path: filename(path),
+		Err:  os.ErrNotExist,
+	}
 }
 
 // Stat returns a FileInfo describing the named file. If there is an error, it will be of type *PathError.

@@ -131,6 +131,27 @@ func TestLstat(t *testing.T) {
 	defer cleanup()
 
 	t.Run("not-found", func(t *testing.T) {
+		req := fs.s3().PutObjectRequest(&s3.PutObjectInput{
+			Bucket: aws.String(fs.Bucket),
+			Key:    aws.String(fmt.Sprintf("%s/not-found ", fs.Prefix)),
+			Body:   strings.NewReader("abc123"),
+		})
+		req.SetContext(ctx)
+		if _, err := req.Send(); err != nil {
+			t.Error(err)
+			return
+		}
+		req = fs.s3().PutObjectRequest(&s3.PutObjectInput{
+			Bucket: aws.String(fs.Bucket),
+			Key:    aws.String(fmt.Sprintf("%s/not-found  /", fs.Prefix)),
+			Body:   strings.NewReader("abc123"),
+		})
+		req.SetContext(ctx)
+		if _, err := req.Send(); err != nil {
+			t.Error(err)
+			return
+		}
+
 		_, err := fs.Lstat(ctx, "not-fount")
 		if err == nil || !os.IsNotExist(err) {
 			t.Errorf("unexpected error: %v", err)
