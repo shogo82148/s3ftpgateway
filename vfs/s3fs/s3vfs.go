@@ -28,6 +28,21 @@ type FileSystem struct {
 	s3api s3iface.S3API
 }
 
+// filekey converts the name to the key value on the S3 bucket.
+func (fs *FileSystem) filekey(name string) string {
+	name = pathpkg.Clean("/" + name)
+	return strings.TrimPrefix(pathpkg.Join(fs.Prefix, name), "/")
+}
+
+// dirkey converts the name to the key value for directries on the S3 bucket.
+func (fs *FileSystem) dirkey(name string) string {
+	name = fs.filekey(name)
+	if name == "" {
+		return ""
+	}
+	return name + "/"
+}
+
 func filename(p string) string {
 	return strings.TrimPrefix(pathpkg.Clean(p), "/")
 }
@@ -55,10 +70,9 @@ func (f *fileReader) Close() error {
 // Open opens the file.
 func (fs *FileSystem) Open(ctx context.Context, name string) (vfs.ReadSeekCloser, error) {
 	svc := fs.s3()
-	name = filename(name)
 	req := svc.GetObjectRequest(&s3.GetObjectInput{
 		Bucket: aws.String(fs.Bucket),
-		Key:    aws.String(pathpkg.Join(fs.Prefix, name)),
+		Key:    aws.String(fs.filekey(name)),
 	})
 	req.SetContext(ctx)
 	resp, err := req.Send()
@@ -68,13 +82,13 @@ func (fs *FileSystem) Open(ctx context.Context, name string) (vfs.ReadSeekCloser
 			case http.StatusNotFound:
 				return nil, &os.PathError{
 					Op:   "open",
-					Path: name,
+					Path: filename(name),
 					Err:  os.ErrNotExist,
 				}
 			case http.StatusForbidden:
 				return nil, &os.PathError{
 					Op:   "open",
-					Path: name,
+					Path: filename(name),
 					Err:  os.ErrPermission,
 				}
 			}
@@ -162,10 +176,9 @@ func (h dirinfo) Sys() interface{} {
 // Lstat returns a FileInfo describing the named file.
 func (fs *FileSystem) Lstat(ctx context.Context, path string) (os.FileInfo, error) {
 	svc := fs.s3()
-	path = filename(path)
 	req := svc.HeadObjectRequest(&s3.HeadObjectInput{
 		Bucket: aws.String(fs.Bucket),
-		Key:    aws.String(pathpkg.Join(fs.Prefix, path)),
+		Key:    aws.String(fs.filekey(path)),
 	})
 	req.SetContext(ctx)
 	resp, err := req.Send()
@@ -173,7 +186,7 @@ func (fs *FileSystem) Lstat(ctx context.Context, path string) (os.FileInfo, erro
 		// Search directory
 		req := svc.ListObjectsV2Request(&s3.ListObjectsV2Input{
 			Bucket:    aws.String(fs.Bucket),
-			Prefix:    aws.String(pathpkg.Join(fs.Prefix, path) + "/"),
+			Prefix:    aws.String(fs.dirkey(path)),
 			Delimiter: aws.String("/"),
 			MaxKeys:   aws.Int64(1),
 		})
@@ -188,13 +201,13 @@ func (fs *FileSystem) Lstat(ctx context.Context, path string) (os.FileInfo, erro
 			case http.StatusNotFound:
 				return nil, &os.PathError{
 					Op:   "stat",
-					Path: path,
+					Path: filename(path),
 					Err:  os.ErrNotExist,
 				}
 			case http.StatusForbidden:
 				return nil, &os.PathError{
 					Op:   "stat",
-					Path: path,
+					Path: filename(path),
 					Err:  os.ErrPermission,
 				}
 			}
@@ -271,11 +284,9 @@ var maxKeys = int64(1000)
 // ReadDir reads the contents of the directory.
 func (fs *FileSystem) ReadDir(ctx context.Context, path string) ([]os.FileInfo, error) {
 	svc := fs.s3()
-	path = filename(path)
-	prefix := strings.TrimPrefix(pathpkg.Join(fs.Prefix, path)+"/", "/")
 	req := svc.ListObjectsV2Request(&s3.ListObjectsV2Input{
 		Bucket:    aws.String(fs.Bucket),
-		Prefix:    aws.String(prefix),
+		Prefix:    aws.String(fs.dirkey(path)),
 		Delimiter: aws.String("/"),
 		MaxKeys:   &maxKeys,
 	})
@@ -341,10 +352,9 @@ func (f *fileWriter) Close() error {
 		return err
 	}
 	svc := f.fs.s3()
-	name := filename(f.name)
 	req := svc.PutObjectRequest(&s3.PutObjectInput{
 		Bucket: aws.String(f.fs.Bucket),
-		Key:    aws.String(pathpkg.Join(f.fs.Prefix, name)),
+		Key:    aws.String(f.fs.filekey(f.name)),
 		Body:   f.File,
 	})
 	req.SetContext(f.ctx)
@@ -373,12 +383,10 @@ func (fs *FileSystem) Create(ctx context.Context, name string) (vfs.WriteSeekClo
 // Mkdir creates a new directory. If name is already a directory, Mkdir
 // returns an error (that can be detected using os.IsExist).
 func (fs *FileSystem) Mkdir(ctx context.Context, name string) error {
-	name = filename(name)
-	name = strings.TrimPrefix(pathpkg.Join(fs.Prefix, name)+"/", "/")
 	svc := fs.s3()
 	req := svc.PutObjectRequest(&s3.PutObjectInput{
 		Bucket: aws.String(fs.Bucket),
-		Key:    aws.String(name),
+		Key:    aws.String(fs.dirkey(name)),
 		Body:   strings.NewReader(""),
 	})
 	req.SetContext(ctx)

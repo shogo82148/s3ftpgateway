@@ -48,6 +48,39 @@ func newTestFileSystem(t *testing.T) (*FileSystem, func()) {
 	return fs, func() {}
 }
 
+func TestKey(t *testing.T) {
+	cases := []struct {
+		prefix string
+		in     string
+		file   string
+		dir    string
+	}{
+		{"", "foobar.txt", "foobar.txt", "foobar.txt/"},
+		{"", "/foobar.txt", "foobar.txt", "foobar.txt/"},
+		{"", "", "", ""},
+		{"", "../foobar.txt", "foobar.txt", "foobar.txt/"},
+
+		{"abc123", "foobar.txt", "abc123/foobar.txt", "abc123/foobar.txt/"},
+		{"abc123", "/foobar.txt", "abc123/foobar.txt", "abc123/foobar.txt/"},
+		{"abc123", "", "abc123", "abc123/"},
+		{"abc123", "../foobar.txt", "abc123/foobar.txt", "abc123/foobar.txt/"},
+	}
+
+	for i, c := range cases {
+		fs := &FileSystem{
+			Prefix: c.prefix,
+		}
+		file := fs.filekey(c.in)
+		if file != c.file {
+			t.Errorf("file %d: want %s, got %s", i, c.file, file)
+		}
+		dir := fs.dirkey(c.in)
+		if dir != c.dir {
+			t.Errorf("dir %d: want %s, got %s", i, c.dir, dir)
+		}
+	}
+}
+
 func TestOpen(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
