@@ -166,7 +166,17 @@ func TestReadDir(t *testing.T) {
 		// add test objects
 		req := fs.s3().PutObjectRequest(&s3.PutObjectInput{
 			Bucket: aws.String(fs.Bucket),
-			Key:    aws.String(fmt.Sprintf("%s/bar/foo.txt", fs.Prefix)),
+			Key:    aws.String(fmt.Sprintf("%s/bar/foo1.txt", fs.Prefix)),
+			Body:   strings.NewReader("abc123"),
+		})
+		req.SetContext(ctx)
+		if _, err := req.Send(); err != nil {
+			t.Error(err)
+			return
+		}
+		req = fs.s3().PutObjectRequest(&s3.PutObjectInput{
+			Bucket: aws.String(fs.Bucket),
+			Key:    aws.String(fmt.Sprintf("%s/bar/foo2.txt", fs.Prefix)),
 			Body:   strings.NewReader("abc123"),
 		})
 		req.SetContext(ctx)
@@ -190,9 +200,14 @@ func TestReadDir(t *testing.T) {
 			t.Error(err)
 			return
 		}
-		t.Log(list)
+		if len(list) != 2 {
+			t.Fatalf("want 2, got %d", len(list))
+		}
 		if list[0].Name() != "bar" {
 			t.Errorf("want bar, got %s", list[0].Name())
+		}
+		if list[1].Name() != "foobar.txt" {
+			t.Errorf("want foobar.txt, got %s", list[1].Name())
 		}
 	})
 }

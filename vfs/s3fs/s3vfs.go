@@ -239,13 +239,40 @@ func (obj object) Sys() interface{} {
 	return obj.obj
 }
 
+type commonPrefix struct {
+	prefix s3.CommonPrefix
+}
+
+func (p commonPrefix) Name() string {
+	return pathpkg.Base(strings.TrimSuffix(aws.StringValue(p.prefix.Prefix), "/"))
+}
+
+func (p commonPrefix) Size() int64 {
+	return 0
+}
+func (p commonPrefix) Mode() os.FileMode {
+	return 0755 | os.ModeDir
+}
+func (p commonPrefix) ModTime() time.Time {
+	return time.Time{}
+}
+
+func (p commonPrefix) IsDir() bool {
+	return true
+}
+
+func (p commonPrefix) Sys() interface{} {
+	return p.prefix
+}
+
 // ReadDir reads the contents of the directory.
 func (fs *FileSystem) ReadDir(ctx context.Context, path string) ([]os.FileInfo, error) {
 	svc := fs.s3()
 	path = filename(path)
+	prefix := strings.TrimPrefix(pathpkg.Join(fs.Prefix, path)+"/", "/")
 	req := svc.ListObjectsV2Request(&s3.ListObjectsV2Input{
 		Bucket:    aws.String(fs.Bucket),
-		Prefix:    aws.String(pathpkg.Join(fs.Prefix, path+"/")),
+		Prefix:    aws.String(prefix),
 		Delimiter: aws.String("/"),
 	})
 	req.SetContext(ctx)
@@ -271,9 +298,24 @@ func (fs *FileSystem) ReadDir(ctx context.Context, path string) ([]os.FileInfo, 
 		return nil, err
 	}
 
-	res := make([]os.FileInfo, 0, int(aws.Int64Value(resp.KeyCount)))
-	for _, obj := range resp.Contents {
-		res = append(res, object{obj: obj})
+	// merge Contents and CommonPrefixes
+	contents := resp.Contents
+	prefixes := resp.CommonPrefixes
+	res := make([]os.FileInfo, 0, len(contents)+len(prefixes))
+	for len(contents) > 0 && len(prefixes) > 0 {
+		if aws.StringValue(contents[0].Key) < aws.StringValue(prefixes[0].Prefix) {
+			res = append(res, object{contents[0]})
+			contents = contents[1:]
+		} else {
+			res = append(res, commonPrefix{prefixes[0]})
+			prefixes = prefixes[1:]
+		}
+	}
+	for _, v := range contents {
+		res = append(res, object{v})
+	}
+	for _, v := range prefixes {
+		res = append(res, commonPrefix{v})
 	}
 	return res, nil
 }
