@@ -270,13 +270,13 @@ func (fs *FileSystem) ReadDir(ctx context.Context, path string) ([]os.FileInfo, 
 			case http.StatusNotFound:
 				return nil, &os.PathError{
 					Op:   "readdir",
-					Path: path,
+					Path: filename(path),
 					Err:  os.ErrNotExist,
 				}
 			case http.StatusForbidden:
 				return nil, &os.PathError{
 					Op:   "readdir",
-					Path: path,
+					Path: filename(path),
 					Err:  os.ErrPermission,
 				}
 			}
@@ -317,6 +317,19 @@ func (f *fileWriter) Close() error {
 
 // Create creates the named file, truncating it if it already exists.
 func (fs *FileSystem) Create(ctx context.Context, name string) (vfs.WriteSeekCloser, error) {
+	stat, err := fs.Lstat(ctx, name)
+	if err != nil {
+		if !os.IsNotExist(err) {
+			return nil, err
+		}
+	} else if stat.IsDir() {
+		return nil, &os.PathError{
+			Op:   "create",
+			Path: filename(name),
+			Err:  os.ErrExist,
+		}
+	}
+
 	tmp, err := ioutil.TempFile("", "s3fs_")
 	if err != nil {
 		return nil, err
@@ -333,6 +346,19 @@ func (fs *FileSystem) Create(ctx context.Context, name string) (vfs.WriteSeekClo
 // Mkdir creates a new directory. If name is already a directory, Mkdir
 // returns an error (that can be detected using os.IsExist).
 func (fs *FileSystem) Mkdir(ctx context.Context, name string) error {
+	_, err := fs.Lstat(ctx, name)
+	if err != nil {
+		if !os.IsNotExist(err) {
+			return err
+		}
+	} else {
+		return &os.PathError{
+			Op:   "create",
+			Path: filename(name),
+			Err:  os.ErrExist,
+		}
+	}
+
 	svc := fs.s3()
 	req := svc.PutObjectRequest(&s3.PutObjectInput{
 		Bucket: aws.String(fs.Bucket),

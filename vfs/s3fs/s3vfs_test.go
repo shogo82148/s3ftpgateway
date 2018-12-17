@@ -272,38 +272,60 @@ func TestCreate(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
-	fs, cleanup := newTestFileSystem(t)
-	defer cleanup()
+	t.Run("success", func(t *testing.T) {
+		fs, cleanup := newTestFileSystem(t)
+		defer cleanup()
 
-	w, err := fs.Create(ctx, "foobar.txt")
-	if err != nil {
-		t.Fatal(err)
-	}
-	if _, err := io.WriteString(w, "abc123"); err != nil {
-		t.Fatal(err)
-	}
-	if err := w.Close(); err != nil {
-		t.Fatal(err)
-	}
+		w, err := fs.Create(ctx, "foobar.txt")
+		if err != nil {
+			t.Fatal(err)
+		}
+		if _, err := io.WriteString(w, "abc123"); err != nil {
+			t.Fatal(err)
+		}
+		if err := w.Close(); err != nil {
+			t.Fatal(err)
+		}
 
-	req := fs.s3().GetObjectRequest(&s3.GetObjectInput{
-		Bucket: aws.String(fs.Bucket),
-		Key:    aws.String(fmt.Sprintf("%s/foobar.txt", fs.Prefix)),
+		req := fs.s3().GetObjectRequest(&s3.GetObjectInput{
+			Bucket: aws.String(fs.Bucket),
+			Key:    aws.String(fmt.Sprintf("%s/foobar.txt", fs.Prefix)),
+		})
+		req.SetContext(ctx)
+		resp, err := req.Send()
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer resp.Body.Close()
+
+		ret, err := ioutil.ReadAll(resp.Body)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if string(ret) != "abc123" {
+			t.Errorf("want abc123, got %s", string(ret))
+		}
 	})
-	req.SetContext(ctx)
-	resp, err := req.Send()
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer resp.Body.Close()
 
-	ret, err := ioutil.ReadAll(resp.Body)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if string(ret) != "abc123" {
-		t.Errorf("want abc123, got %s", string(ret))
-	}
+	t.Run("exist", func(t *testing.T) {
+		fs, cleanup := newTestFileSystem(t)
+		defer cleanup()
+
+		req := fs.s3().PutObjectRequest(&s3.PutObjectInput{
+			Bucket: aws.String(fs.Bucket),
+			Key:    aws.String(fmt.Sprintf("%s/foobar/hoge.txt", fs.Prefix)),
+			Body:   strings.NewReader("abc123"),
+		})
+		req.SetContext(ctx)
+		if _, err := req.Send(); err != nil {
+			t.Error(err)
+			return
+		}
+
+		if _, err := fs.Create(ctx, "foobar"); err == nil || !os.IsExist(err) {
+			t.Errorf("want ErrExist, got %s", err)
+		}
+	})
 }
 
 func TestMkdir(t *testing.T) {
@@ -328,5 +350,25 @@ func TestMkdir(t *testing.T) {
 			t.Fatal(err)
 		}
 		defer resp.Body.Close()
+	})
+
+	t.Run("exist", func(t *testing.T) {
+		fs, cleanup := newTestFileSystem(t)
+		defer cleanup()
+
+		req := fs.s3().PutObjectRequest(&s3.PutObjectInput{
+			Bucket: aws.String(fs.Bucket),
+			Key:    aws.String(fmt.Sprintf("%s/foobar/hoge.txt", fs.Prefix)),
+			Body:   strings.NewReader("abc123"),
+		})
+		req.SetContext(ctx)
+		if _, err := req.Send(); err != nil {
+			t.Error(err)
+			return
+		}
+
+		if err := fs.Mkdir(ctx, "foobar"); err == nil || !os.IsExist(err) {
+			t.Errorf("want ErrExist, got %s", err)
+		}
 	})
 }
