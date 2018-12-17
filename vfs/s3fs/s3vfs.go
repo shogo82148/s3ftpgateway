@@ -265,6 +265,9 @@ func (p commonPrefix) Sys() interface{} {
 	return p.prefix
 }
 
+// max-keys for test
+var maxKeys = int64(1000)
+
 // ReadDir reads the contents of the directory.
 func (fs *FileSystem) ReadDir(ctx context.Context, path string) ([]os.FileInfo, error) {
 	svc := fs.s3()
@@ -274,10 +277,33 @@ func (fs *FileSystem) ReadDir(ctx context.Context, path string) ([]os.FileInfo, 
 		Bucket:    aws.String(fs.Bucket),
 		Prefix:    aws.String(prefix),
 		Delimiter: aws.String("/"),
+		MaxKeys:   &maxKeys,
 	})
 	req.SetContext(ctx)
-	resp, err := req.Send()
-	if err != nil {
+	pager := req.Paginate()
+	res := []os.FileInfo{}
+	for pager.Next() {
+		// merge Contents and CommonPrefixes
+		resp := pager.CurrentPage()
+		contents := resp.Contents
+		prefixes := resp.CommonPrefixes
+		for len(contents) > 0 && len(prefixes) > 0 {
+			if aws.StringValue(contents[0].Key) < aws.StringValue(prefixes[0].Prefix) {
+				res = append(res, object{contents[0]})
+				contents = contents[1:]
+			} else {
+				res = append(res, commonPrefix{prefixes[0]})
+				prefixes = prefixes[1:]
+			}
+		}
+		for _, v := range contents {
+			res = append(res, object{v})
+		}
+		for _, v := range prefixes {
+			res = append(res, commonPrefix{v})
+		}
+	}
+	if err := pager.Err(); err != nil {
 		if err, ok := err.(awserr.RequestFailure); ok {
 			switch err.StatusCode() {
 			case http.StatusNotFound:
@@ -296,26 +322,6 @@ func (fs *FileSystem) ReadDir(ctx context.Context, path string) ([]os.FileInfo, 
 			return nil, err
 		}
 		return nil, err
-	}
-
-	// merge Contents and CommonPrefixes
-	contents := resp.Contents
-	prefixes := resp.CommonPrefixes
-	res := make([]os.FileInfo, 0, len(contents)+len(prefixes))
-	for len(contents) > 0 && len(prefixes) > 0 {
-		if aws.StringValue(contents[0].Key) < aws.StringValue(prefixes[0].Prefix) {
-			res = append(res, object{contents[0]})
-			contents = contents[1:]
-		} else {
-			res = append(res, commonPrefix{prefixes[0]})
-			prefixes = prefixes[1:]
-		}
-	}
-	for _, v := range contents {
-		res = append(res, object{v})
-	}
-	for _, v := range prefixes {
-		res = append(res, commonPrefix{v})
 	}
 	return res, nil
 }

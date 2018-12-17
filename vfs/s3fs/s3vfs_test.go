@@ -162,7 +162,8 @@ func TestReadDir(t *testing.T) {
 	fs, cleanup := newTestFileSystem(t)
 	defer cleanup()
 
-	t.Run("found-file", func(t *testing.T) {
+	maxKeys = 1
+	t.Run("simple", func(t *testing.T) {
 		// add test objects
 		req := fs.s3().PutObjectRequest(&s3.PutObjectInput{
 			Bucket: aws.String(fs.Bucket),
