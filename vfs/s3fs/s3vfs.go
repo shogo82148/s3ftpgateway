@@ -2,6 +2,7 @@ package s3fs
 
 import (
 	"context"
+	"errors"
 	"io"
 	"io/ioutil"
 	"net/http"
@@ -372,9 +373,39 @@ func (fs *FileSystem) Mkdir(ctx context.Context, name string) error {
 	return nil
 }
 
-// Remove removes the named file or directory.
+// Remove removes the named file or (empty) directory.
 func (fs *FileSystem) Remove(ctx context.Context, name string) error {
+	// the file or directory is exists?
+	stat, err := fs.Lstat(ctx, name)
+	if err != nil {
+		return err
+	}
 	svc := fs.s3()
+	if stat.IsDir() {
+		// the directory is empty?
+		req := svc.ListObjectsV2Request(&s3.ListObjectsV2Input{
+			Bucket:  aws.String(fs.Bucket),
+			Prefix:  aws.String(fs.dirkey(name)),
+			MaxKeys: aws.Int64(1),
+		})
+		req.SetContext(ctx)
+		resp, err := req.Send()
+		if err != nil {
+			return &os.PathError{
+				Op:   "remove",
+				Path: filename(name),
+				Err:  err,
+			}
+		}
+		if aws.Int64Value(resp.KeyCount) != 0 {
+			return &os.PathError{
+				Op:   "remove",
+				Path: filename(name),
+				Err:  errors.New("directory is not empty"),
+			}
+		}
+	}
+
 	req := svc.DeleteObjectRequest(&s3.DeleteObjectInput{
 		Bucket: aws.String(fs.Bucket),
 		Key:    aws.String(fs.filekey(name)),

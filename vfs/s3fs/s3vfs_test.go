@@ -396,4 +396,33 @@ func TestRemove(t *testing.T) {
 			t.Fatal(err)
 		}
 	})
+
+	t.Run("no file", func(t *testing.T) {
+		fs, cleanup := newTestFileSystem(t)
+		defer cleanup()
+
+		if err := fs.Remove(ctx, "foobar.txt"); err == nil {
+			t.Errorf("want error, got %s", err)
+		}
+	})
+
+	t.Run("non empty dir", func(t *testing.T) {
+		fs, cleanup := newTestFileSystem(t)
+		defer cleanup()
+
+		req := fs.s3().PutObjectRequest(&s3.PutObjectInput{
+			Bucket: aws.String(fs.Bucket),
+			Key:    aws.String(fmt.Sprintf("%s/foobar/hoge.txt", fs.Prefix)),
+			Body:   strings.NewReader("abc123"),
+		})
+		req.SetContext(ctx)
+		if _, err := req.Send(); err != nil {
+			t.Error(err)
+			return
+		}
+
+		if err := fs.Remove(ctx, "foobar"); err == nil {
+			t.Errorf("want error, got %s", err)
+		}
+	})
 }
