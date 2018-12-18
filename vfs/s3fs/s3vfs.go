@@ -93,9 +93,12 @@ func (fs *FileSystem) Open(ctx context.Context, name string) (vfs.ReadSeekCloser
 					Err:  os.ErrPermission,
 				}
 			}
-			return nil, err
 		}
-		return nil, err
+		return nil, &os.PathError{
+			Op:   "open",
+			Path: filename(name),
+			Err:  err,
+		}
 	}
 	defer resp.Body.Close()
 
@@ -155,9 +158,12 @@ func (fs *FileSystem) Lstat(ctx context.Context, path string) (os.FileInfo, erro
 					Err:  os.ErrPermission,
 				}
 			}
-			return nil, err
 		}
-		return nil, err
+		return nil, &os.PathError{
+			Op:   "stat",
+			Path: filename(path),
+			Err:  err,
+		}
 	}
 	if len(resp.CommonPrefixes) > 0 && aws.StringValue(resp.CommonPrefixes[0].Prefix) == file+"/" {
 		return commonPrefix{resp.CommonPrefixes[0]}, nil
@@ -281,9 +287,12 @@ func (fs *FileSystem) ReadDir(ctx context.Context, path string) ([]os.FileInfo, 
 					Err:  os.ErrPermission,
 				}
 			}
-			return nil, err
 		}
-		return nil, err
+		return nil, &os.PathError{
+			Op:   "readdir",
+			Path: filename(path),
+			Err:  err,
+		}
 	}
 	return res, nil
 }
@@ -311,7 +320,11 @@ func (f *fileWriter) Close() error {
 	req.SetContext(f.ctx)
 	if _, err := req.Send(); err != nil {
 		f.File.Close()
-		return err
+		return &os.PathError{
+			Op:   "create",
+			Path: filename(f.name),
+			Err:  err,
+		}
 	}
 	return f.File.Close()
 }
@@ -368,7 +381,11 @@ func (fs *FileSystem) Mkdir(ctx context.Context, name string) error {
 	})
 	req.SetContext(ctx)
 	if _, err := req.Send(); err != nil {
-		return err
+		return &os.PathError{
+			Op:   "mkdir",
+			Path: filename(name),
+			Err:  err,
+		}
 	}
 	return nil
 }
@@ -412,7 +429,11 @@ func (fs *FileSystem) Remove(ctx context.Context, name string) error {
 	})
 	req.SetContext(ctx)
 	if _, err := req.Send(); err != nil {
-		return err
+		return &os.PathError{
+			Op:   "remove",
+			Path: filename(name),
+			Err:  err,
+		}
 	}
 	return nil
 }

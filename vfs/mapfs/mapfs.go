@@ -42,7 +42,11 @@ func (fs *mapFS) Open(ctx context.Context, name string) (vfs.ReadSeekCloser, err
 
 	b, ok := fs.m[filename(name)]
 	if !ok {
-		return nil, os.ErrNotExist
+		return nil, &os.PathError{
+			Op:   "open",
+			Path: filename(name),
+			Err:  os.ErrNotExist,
+		}
 	}
 	return nopCloser{strings.NewReader(b)}, nil
 }
@@ -75,7 +79,11 @@ func (fs *mapFS) Lstat(ctx context.Context, path string) (os.FileInfo, error) {
 			return dirInfo(path), nil
 		}
 	}
-	return nil, os.ErrNotExist
+	return nil, &os.PathError{
+		Op:   "stat",
+		Path: filename(path),
+		Err:  os.ErrNotExist,
+	}
 }
 
 // Stat returns a FileInfo describing the named file. If there is an error, it will be of type *PathError.
@@ -142,7 +150,11 @@ func (fs *mapFS) ReadDir(ctx context.Context, path string) ([]os.FileInfo, error
 
 	ents, fim := fs.readDir(path)
 	if len(ents) == 0 {
-		return nil, os.ErrNotExist
+		return nil, &os.PathError{
+			Op:   "readdir",
+			Path: filename(path),
+			Err:  os.ErrNotExist,
+		}
 	}
 
 	sort.Strings(ents)
@@ -248,15 +260,27 @@ func (fs *mapFS) Mkdir(ctx context.Context, name string) error {
 	defer fs.mu.Unlock()
 	name = filename(name)
 	if _, ok := fs.m[name]; ok {
-		return os.ErrExist
+		return &os.PathError{
+			Op:   "mkdir",
+			Path: filename(name),
+			Err:  os.ErrExist,
+		}
 	}
 	nameslash := name + "/"
 	if _, ok := fs.m[nameslash]; ok {
-		return os.ErrExist
+		return &os.PathError{
+			Op:   "mkdir",
+			Path: filename(name),
+			Err:  os.ErrExist,
+		}
 	}
 	for fn := range fs.m {
 		if strings.HasPrefix(fn, nameslash) {
-			return os.ErrExist
+			return &os.PathError{
+				Op:   "mkdir",
+				Path: filename(name),
+				Err:  os.ErrExist,
+			}
 		}
 	}
 	fs.m[name+"/"] = ""
@@ -283,7 +307,11 @@ func (fs *mapFS) Remove(ctx context.Context, name string) error {
 	nameslash := name + "/"
 	for fn := range fs.m {
 		if fn != nameslash && strings.HasPrefix(fn, nameslash) {
-			return &os.PathError{Op: "remove", Path: name, Err: errors.New("directory is not empty")}
+			return &os.PathError{
+				Op:   "remove",
+				Path: name,
+				Err:  errors.New("directory is not empty"),
+			}
 		}
 	}
 	if _, ok := fs.m[nameslash]; ok {
@@ -294,7 +322,11 @@ func (fs *mapFS) Remove(ctx context.Context, name string) error {
 		}
 		return nil
 	}
-	return os.ErrNotExist
+	return &os.PathError{
+		Op:   "remove",
+		Path: name,
+		Err:  os.ErrNotExist,
+	}
 }
 
 // mapFI is the map-based implementation of FileInfo.
