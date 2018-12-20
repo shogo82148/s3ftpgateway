@@ -72,7 +72,7 @@ var commands = map[string]command{
 	"SITE": nil,
 	"SMNT": nil,
 	"STAT": nil,
-	"STOR": nil,
+	"STOR": commandStor{},
 	"STOU": nil,
 	"STRU": nil,
 	"SYST": nil,
@@ -172,6 +172,7 @@ func (commandRetr) Execute(ctx context.Context, c *ServerConn, cmd *Command) {
 	f, err := c.fileSystem().Open(ctx, cmd.Arg)
 	if err != nil {
 		c.WriteReply(&Reply{Code: 553, Messages: []string{"Requested action not taken."}})
+		return
 	}
 	defer f.Close()
 
@@ -192,6 +193,38 @@ func (commandRetr) Execute(ctx context.Context, c *ServerConn, cmd *Command) {
 	}
 
 	c.WriteReply(&Reply{Code: 226, Messages: []string{fmt.Sprintf("Data transfer starting %d bytes", n)}})
+}
+
+// commandStor
+type commandStor struct{}
+
+func (commandStor) IsExtend() bool     { return false }
+func (commandStor) RequireParam() bool { return false }
+func (commandStor) RequireAuth() bool  { return true }
+
+func (commandStor) Execute(ctx context.Context, c *ServerConn, cmd *Command) {
+	f, err := c.fileSystem().Create(ctx, cmd.Arg)
+	if err != nil {
+		c.WriteReply(&Reply{Code: 553, Messages: []string{"Requested action not taken."}})
+		return
+	}
+	c.WriteReply(&Reply{Code: 150, Messages: []string{"Data transfer starting"}})
+
+	conn, err := c.dt.Conn(ctx)
+	if err != nil {
+		c.WriteReply(&Reply{Code: 552, Messages: []string{"Requested file action aborted."}})
+		return
+	}
+	n, err := io.Copy(f, conn)
+	if err != nil {
+		c.WriteReply(&Reply{Code: 552, Messages: []string{"Requested file action aborted."}})
+		return
+	}
+	if err := f.Close(); err != nil {
+		c.WriteReply(&Reply{Code: 552, Messages: []string{"Requested file action aborted."}})
+		return
+	}
+	c.WriteReply(&Reply{Code: 226, Messages: []string{fmt.Sprintf("OK, received %d bytes.", n)}})
 }
 
 // commandType
