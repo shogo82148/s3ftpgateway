@@ -4,7 +4,6 @@ import (
 	"context"
 	"fmt"
 	"io"
-	"log"
 	"net"
 	"strconv"
 	"strings"
@@ -270,7 +269,7 @@ func (commandAuth) Execute(ctx context.Context, c *ServerConn, cmd *Command) {
 	}
 	c.WriteReply(StatusSecurityDataExchangeComplete, "AUTH command OK.")
 	if err := c.upgradeToTLS(); err != nil {
-		log.Println(err)
+		c.server.logger().Printf(c.sessionID, "fail to upgrade to tls: %v", err)
 	}
 }
 

@@ -23,7 +23,8 @@ const (
 
 // ServerConn is a connection of the ftp server.
 type ServerConn struct {
-	server *Server
+	server    *Server
+	sessionID string
 
 	// connection for control
 	mu      sync.Mutex
@@ -57,12 +58,18 @@ func (c *ServerConn) serve(ctx context.Context) {
 
 	for c.scanner.Scan() {
 		text := c.scanner.Text()
-		log.Println(text)
 		cmd, err := ParseCommand(text)
 		if err != nil {
-			log.Println(err)
-			return
+			c.WriteReply(StatusBadCommand, "Syntax error.")
+			continue
 		}
+
+		if cmd.Name != "PASS" {
+			c.server.logger().PrintCommand(c.sessionID, cmd.Name, cmd.Arg)
+		} else {
+			c.server.logger().PrintCommand(c.sessionID, cmd.Name, "****")
+		}
+
 		if command, ok := commands[cmd.Name]; ok && command != nil {
 			command.Execute(ctx, c, cmd)
 		} else {
@@ -76,6 +83,11 @@ func (c *ServerConn) serve(ctx context.Context) {
 
 // WriteReply writes a ftp reply.
 func (c *ServerConn) WriteReply(code int, messages ...string) {
+	if len(messages) > 0 {
+		c.server.logger().PrintResponse(c.sessionID, code, messages[0])
+	} else {
+		c.server.logger().PrintResponse(c.sessionID, code, "")
+	}
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	c.writeReply(code, messages...)

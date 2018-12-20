@@ -2,7 +2,10 @@ package ftp
 
 import (
 	"context"
+	"crypto/rand"
 	"crypto/tls"
+	"encoding/hex"
+	"io"
 	"net"
 	"time"
 
@@ -18,6 +21,8 @@ type Server struct {
 	FileSystem vfs.FileSystem // Virtual File System
 
 	TLSConfig *tls.Config
+
+	Logger Logger
 
 	listener net.Listener
 }
@@ -99,9 +104,18 @@ func (s *Server) ServeTLS(l net.Listener, certFile, keyFile string) error {
 }
 
 func (s *Server) newConn(rwc net.Conn) *ServerConn {
+	var sessionID string
+	var buf [4]byte
+	if _, err := io.ReadFull(rand.Reader, buf[:]); err != nil {
+		sessionID = "????????"
+	} else {
+		sessionID = hex.EncodeToString(buf[:])
+	}
+
 	c := &ServerConn{
-		server: s,
-		rwc:    rwc,
+		server:    s,
+		sessionID: sessionID,
+		rwc:       rwc,
 	}
 	return c
 }
@@ -117,6 +131,13 @@ func (s *Server) authorize(ctx context.Context, user, passord string) (*Authoriz
 // Close immediately closes all active net.Listeners
 func (s *Server) Close() error {
 	return s.listener.Close()
+}
+
+func (s *Server) logger() Logger {
+	if s.Logger == nil {
+		return StdLogger
+	}
+	return s.Logger
 }
 
 // tcpKeepAliveListener sets TCP keep-alive timeouts on accepted
