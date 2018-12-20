@@ -10,7 +10,7 @@ import (
 	"net"
 	"sync"
 
-	"github.com/sourcegraph/ctxvfs"
+	"github.com/shogo82148/s3ftpgateway/vfs"
 )
 
 type protectionLevel byte
@@ -162,7 +162,7 @@ func (c *ServerConn) upgradeToTLS() error {
 	return nil
 }
 
-func (c *ServerConn) fileSystem() ctxvfs.FileSystem {
+func (c *ServerConn) fileSystem() vfs.FileSystem {
 	return c.server.FileSystem
 }
 

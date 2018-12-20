@@ -6,7 +6,7 @@ import (
 	"net"
 	"time"
 
-	"github.com/sourcegraph/ctxvfs"
+	"github.com/shogo82148/s3ftpgateway/vfs"
 )
 
 // A Server defines patameters for running a FTP server.
@@ -15,7 +15,7 @@ type Server struct {
 
 	Authorizer Authorizer // Authorize method
 
-	FileSystem ctxvfs.FileSystem // Virtual File System
+	FileSystem vfs.FileSystem // Virtual File System
 
 	TLSConfig *tls.Config
 
