@@ -9,7 +9,7 @@ import (
 
 	"github.com/shogo82148/s3ftpgateway/ftp"
 	"github.com/shogo82148/s3ftpgateway/ftp/internal"
-	"github.com/sourcegraph/ctxvfs"
+	"github.com/shogo82148/s3ftpgateway/vfs"
 )
 
 func newLocalListener() net.Listener {
@@ -50,7 +50,7 @@ type Server struct {
 
 // NewServer starts and returns a new Server.
 // The caller should call Close when finished, to shut it down.
-func NewServer(vfs ctxvfs.FileSystem) *Server {
+func NewServer(vfs vfs.FileSystem) *Server {
 	ts := NewUnstartedServer(vfs)
 	ts.Start()
 	return ts
@@ -58,14 +58,14 @@ func NewServer(vfs ctxvfs.FileSystem) *Server {
 
 // NewTLSServer starts and returns a new Server using TLS.
 // The caller should call Close when finished, to shut it down.
-func NewTLSServer(vfs ctxvfs.FileSystem) *Server {
+func NewTLSServer(vfs vfs.FileSystem) *Server {
 	ts := NewUnstartedServer(vfs)
 	ts.StartTLS()
 	return ts
 }
 
 // NewUnstartedServer returns a new Server but doesn't start it.
-func NewUnstartedServer(vfs ctxvfs.FileSystem) *Server {
+func NewUnstartedServer(vfs vfs.FileSystem) *Server {
 	return &Server{
 		Listener: newLocalListener(),
 		Config: &ftp.Server{

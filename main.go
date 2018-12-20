@@ -5,7 +5,7 @@ import (
 	"log"
 
 	"github.com/shogo82148/s3ftpgateway/ftp"
-	"github.com/sourcegraph/ctxvfs"
+	"github.com/shogo82148/s3ftpgateway/vfs/mapfs"
 )
 
 // LocalhostCert is a PEM-encoded TLS cert with SAN IPs
@@ -51,8 +51,8 @@ func main() {
 	}
 	s := &ftp.Server{
 		Addr: ":8000",
-		FileSystem: ctxvfs.Map(map[string][]byte{
-			"hoge": []byte("Hello ftp!"),
+		FileSystem: mapfs.New(map[string]string{
+			"hoge": "Hello ftp!",
 		}),
 		TLSConfig: &tls.Config{
 			NextProtos:   []string{"ftp"},

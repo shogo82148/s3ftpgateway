@@ -10,7 +10,7 @@ import (
 	"testing"
 
 	"github.com/shogo82148/s3ftpgateway/ftp/internal"
-	"github.com/sourcegraph/ctxvfs"
+	"github.com/shogo82148/s3ftpgateway/vfs/mapfs"
 )
 
 func TestServer(t *testing.T) {
@@ -20,8 +20,8 @@ func TestServer(t *testing.T) {
 		return
 	}
 
-	ts := NewServer(ctxvfs.Map(map[string][]byte{
-		"testfile": []byte("Hello ftp!"),
+	ts := NewServer(mapfs.New(map[string]string{
+		"testfile": "Hello ftp!",
 	}))
 	defer ts.Close()
 
@@ -46,8 +46,8 @@ func TestServer_ExplicitTLS(t *testing.T) {
 		return
 	}
 
-	ts := NewServer(ctxvfs.Map(map[string][]byte{
-		"testfile": []byte("Hello ftp!"),
+	ts := NewServer(mapfs.New(map[string]string{
+		"testfile": "Hello ftp!",
 	}))
 	defer ts.Close()
 
@@ -90,8 +90,8 @@ func TestServer_ImplictTLS(t *testing.T) {
 		return
 	}
 
-	ts := NewTLSServer(ctxvfs.Map(map[string][]byte{
-		"testfile": []byte("Hello ftp!"),
+	ts := NewServer(mapfs.New(map[string]string{
+		"testfile": "Hello ftp!",
 	}))
 	defer ts.Close()
 
