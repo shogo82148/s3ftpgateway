@@ -128,12 +128,12 @@ func (commandPass) Execute(ctx context.Context, c *ServerConn, cmd *Command) {
 	auth, err := c.server.authorize(ctx, c.user, cmd.Arg)
 	if err != nil {
 		if err == ErrAuthorizeFailed {
-			c.WriteReply(&Reply{Code: 530, Messages: []string{"Not logged in"}})
+			c.WriteReply(StatusNotLoggedIn, "Not logged in.")
 		}
-		c.WriteReply(&Reply{Code: 500, Messages: []string{"Internal error"}})
+		c.WriteReply(StatusBadCommand, "Internal error.")
 	}
 	c.auth = auth
-	c.WriteReply(&Reply{Code: 230, Messages: []string{"User logged in, proceed"}})
+	c.WriteReply(StatusLoggedIn, "User logged in, proceed.")
 }
 
 type commandPwd struct{}
@@ -144,7 +144,7 @@ func (commandPwd) RequireAuth() bool  { return true }
 
 func (commandPwd) Execute(ctx context.Context, c *ServerConn, cmd *Command) {
 	// TODO: It's dummy response. fix me plz.
-	c.WriteReply(&Reply{Code: 257, Messages: []string{`"/"`}})
+	c.WriteReply(StatusPathCreated, `"/"`)
 }
 
 // commandQuit closes the control connection
@@ -155,7 +155,7 @@ func (commandQuit) RequireParam() bool { return false }
 func (commandQuit) RequireAuth() bool  { return false }
 
 func (commandQuit) Execute(ctx context.Context, c *ServerConn, cmd *Command) {
-	c.WriteReply(&Reply{Code: 221, Messages: []string{"Good bye"}})
+	c.WriteReply(StatusClosing, "Good bye.")
 }
 
 // commandRetr causes the server-DTP to transfer a copy of the
@@ -171,28 +171,28 @@ func (commandRetr) RequireAuth() bool  { return true }
 func (commandRetr) Execute(ctx context.Context, c *ServerConn, cmd *Command) {
 	f, err := c.fileSystem().Open(ctx, cmd.Arg)
 	if err != nil {
-		c.WriteReply(&Reply{Code: 553, Messages: []string{"Requested action not taken."}})
+		c.WriteReply(StatusBadFileName, "Requested action not taken.")
 		return
 	}
 	defer f.Close()
 
-	c.WriteReply(&Reply{Code: 150, Messages: []string{"File status okay; about to open data connection."}})
+	c.WriteReply(StatusAboutToSend, "File status okay; about to open data connection.")
 	conn, err := c.dt.Conn(ctx)
 	if err != nil {
-		c.WriteReply(&Reply{Code: 552, Messages: []string{"Requested file action aborted."}})
+		c.WriteReply(StatusTransfertAborted, "Requested file action aborted.")
 		return
 	}
 	n, err := io.Copy(conn, f)
 	if err != nil {
-		c.WriteReply(&Reply{Code: 552, Messages: []string{"Requested file action aborted."}})
+		c.WriteReply(StatusActionAborted, "Requested file action aborted.")
 		return
 	}
+
+	c.WriteReply(StatusClosingDataConnection, fmt.Sprintf("Data transfer starting %d bytes", n))
 	if dt := c.dt; dt != nil {
 		c.dt = nil
 		dt.Close()
 	}
-
-	c.WriteReply(&Reply{Code: 226, Messages: []string{fmt.Sprintf("Data transfer starting %d bytes", n)}})
 }
 
 // commandStor
@@ -205,26 +205,30 @@ func (commandStor) RequireAuth() bool  { return true }
 func (commandStor) Execute(ctx context.Context, c *ServerConn, cmd *Command) {
 	f, err := c.fileSystem().Create(ctx, cmd.Arg)
 	if err != nil {
-		c.WriteReply(&Reply{Code: 553, Messages: []string{"Requested action not taken."}})
+		c.WriteReply(StatusBadFileName, "Requested action not taken.")
 		return
 	}
-	c.WriteReply(&Reply{Code: 150, Messages: []string{"Data transfer starting"}})
+	c.WriteReply(StatusAboutToSend, "Data transfer starting")
 
 	conn, err := c.dt.Conn(ctx)
 	if err != nil {
-		c.WriteReply(&Reply{Code: 552, Messages: []string{"Requested file action aborted."}})
+		c.WriteReply(StatusTransfertAborted, "Requested file action aborted.")
 		return
 	}
 	n, err := io.Copy(f, conn)
 	if err != nil {
-		c.WriteReply(&Reply{Code: 552, Messages: []string{"Requested file action aborted."}})
+		c.WriteReply(StatusActionAborted, "Requested file action aborted.")
 		return
 	}
 	if err := f.Close(); err != nil {
-		c.WriteReply(&Reply{Code: 552, Messages: []string{"Requested file action aborted."}})
+		c.WriteReply(StatusActionAborted, "Requested file action aborted.")
 		return
 	}
-	c.WriteReply(&Reply{Code: 226, Messages: []string{fmt.Sprintf("OK, received %d bytes.", n)}})
+	c.WriteReply(StatusClosingDataConnection, fmt.Sprintf("OK, received %d bytes.", n))
+	if dt := c.dt; dt != nil {
+		c.dt = nil
+		dt.Close()
+	}
 }
 
 // commandType
@@ -236,7 +240,7 @@ func (commandType) RequireAuth() bool  { return true }
 
 func (commandType) Execute(ctx context.Context, c *ServerConn, cmd *Command) {
 	// TODO: Support other types
-	c.WriteReply(&Reply{Code: 200, Messages: []string{"Type set to ASCII"}})
+	c.WriteReply(StatusCommandOK, "Type set to ASCII")
 }
 
 // commandUser responds to the USER FTP command by asking for the password
@@ -248,7 +252,7 @@ func (commandUser) RequireAuth() bool  { return false }
 
 func (commandUser) Execute(ctx context.Context, c *ServerConn, cmd *Command) {
 	c.user = cmd.Arg
-	c.WriteReply(&Reply{Code: 331, Messages: []string{"User name ok, password required."}})
+	c.WriteReply(StatusUserOK, "User name ok, password required.")
 }
 
 // FTP Security Extensions
@@ -261,10 +265,10 @@ func (commandAuth) RequireAuth() bool  { return false }
 
 func (commandAuth) Execute(ctx context.Context, c *ServerConn, cmd *Command) {
 	if !strings.EqualFold(cmd.Arg, "TLS") {
-		c.WriteReply(&Reply{Code: 550, Messages: []string{"Action not taken."}})
+		c.WriteReply(StatusNotImplementedParameter, "Action not taken.")
 		return
 	}
-	c.WriteReply(&Reply{Code: 234, Messages: []string{"AUTH command OK."}})
+	c.WriteReply(StatusSecurityDataExchangeComplete, "AUTH command OK.")
 	if err := c.upgradeToTLS(); err != nil {
 		log.Println(err)
 	}
@@ -278,9 +282,9 @@ func (commandPbsz) RequireAuth() bool  { return false }
 
 func (commandPbsz) Execute(ctx context.Context, c *ServerConn, cmd *Command) {
 	if c.tls && cmd.Arg == "0" {
-		c.WriteReply(&Reply{Code: 200, Messages: []string{"OK"}})
+		c.WriteReply(StatusCommandOK, "OK.")
 	} else {
-		c.WriteReply(&Reply{Code: 550, Messages: []string{"Action not taken."}})
+		c.WriteReply(StatusFileUnavailable, "Action not taken.")
 	}
 }
 
@@ -295,16 +299,16 @@ func (commandProt) Execute(ctx context.Context, c *ServerConn, cmd *Command) {
 	switch cmd.Arg {
 	case "C": // Clear
 		c.prot = protectionLevelClear
-		c.WriteReply(&Reply{Code: 200, Messages: []string{"OK"}})
+		c.WriteReply(StatusCommandOK, "OK.")
 	case "S": // Safe
-		c.WriteReply(&Reply{Code: 536, Messages: []string{"Safe level is not supported"}})
+		c.WriteReply(StatusProtLevelNotSupported, "Safe level is not supported.")
 	case "E": // Confidential
-		c.WriteReply(&Reply{Code: 536, Messages: []string{"Confidential level is not supported"}})
+		c.WriteReply(StatusProtLevelNotSupported, "Confidential level is not supported.")
 	case "P": // Private
 		if c.tls {
-			c.WriteReply(&Reply{Code: 200, Messages: []string{"OK"}})
+			c.WriteReply(StatusCommandOK, "OK.")
 		} else {
-			c.WriteReply(&Reply{Code: 536, Messages: []string{"Private level is only supported in TLS"}})
+			c.WriteReply(StatusProtLevelNotSupported, "Private level is only supported in TLS.")
 		}
 	}
 }
@@ -320,7 +324,7 @@ func (commandEprt) RequireParam() bool { return true }
 func (commandEprt) RequireAuth() bool  { return false }
 
 func (commandEprt) Execute(ctx context.Context, c *ServerConn, cmd *Command) {
-	c.WriteReply(&Reply{Code: 502, Messages: []string{"Command not implemented."}})
+	c.WriteReply(StatusNotImplemented, "Command not implemented.")
 }
 
 // commandEpsv requests that a server listen on a data port and wait for a connection
@@ -337,17 +341,17 @@ func (commandEpsv) Execute(ctx context.Context, c *ServerConn, cmd *Command) {
 	}
 	dt, err := c.newPassiveDataTransfer()
 	if err != nil {
-		c.WriteReply(&Reply{Code: 425, Messages: []string{"Data connection failed."}})
+		c.WriteReply(StatusCanNotOpenDataConnection, "Data connection failed.")
 		return
 	}
 	_, port, err := net.SplitHostPort(dt.l.Addr().String())
 	if err != nil {
 		dt.Close()
-		c.WriteReply(&Reply{Code: 425, Messages: []string{"Data connection failed."}})
+		c.WriteReply(StatusCanNotOpenDataConnection, "Data connection failed.")
 		return
 	}
 	c.dt = dt
-	c.WriteReply(&Reply{Code: 229, Messages: []string{fmt.Sprintf("Entering extended passive mode (|||%s|)", port)}})
+	c.WriteReply(StatusExtendedPassiveMode, fmt.Sprintf("Entering extended passive mode (|||%s|)", port))
 }
 
 // Extensions to FTP
@@ -364,8 +368,8 @@ func (commandSize) Execute(ctx context.Context, c *ServerConn, cmd *Command) {
 	fs := c.fileSystem()
 	stat, err := fs.Stat(ctx, cmd.Arg)
 	if err != nil {
-		c.WriteReply(&Reply{Code: 550, Messages: []string{"File system error"}})
+		c.WriteReply(StatusFileUnavailable, "File system error.")
 		return
 	}
-	c.WriteReply(&Reply{Code: 229, Messages: []string{strconv.FormatInt(stat.Size(), 10)}})
+	c.WriteReply(StatusFile, strconv.FormatInt(stat.Size(), 10))
 }

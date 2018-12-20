@@ -2,7 +2,6 @@ package ftp
 
 import (
 	"bufio"
-	"bytes"
 	"context"
 	"crypto/tls"
 	"fmt"
@@ -54,7 +53,7 @@ func (c *ServerConn) serve(ctx context.Context) {
 
 	defer c.close()
 
-	c.WriteReply(&Reply{Code: 220, Messages: []string{"Service ready"}})
+	c.WriteReply(StatusReady, "Service ready")
 
 	for c.scanner.Scan() {
 		text := c.scanner.Text()
@@ -67,7 +66,7 @@ func (c *ServerConn) serve(ctx context.Context) {
 		if command, ok := commands[cmd.Name]; ok && command != nil {
 			command.Execute(ctx, c, cmd)
 		} else {
-			c.WriteReply(&Reply{Code: 500, Messages: []string{"Command not found"}})
+			c.WriteReply(StatusBadCommand, "Command not found.")
 		}
 	}
 	if err := c.scanner.Err(); err != nil {
@@ -75,38 +74,14 @@ func (c *ServerConn) serve(ctx context.Context) {
 	}
 }
 
-// Reply is a ftp reply.
-type Reply struct {
-	Code     int
-	Messages []string
-}
-
-func (r Reply) String() string {
-	var buf bytes.Buffer
-	if len(r.Messages) == 0 {
-		fmt.Fprintf(&buf, "%03d \n", r.Code)
-	} else if len(r.Messages) == 1 {
-		fmt.Fprintf(&buf, "%03d %s\n", r.Code, r.Messages[0])
-	} else {
-		for _, msg := range r.Messages[:len(r.Messages)-1] {
-			fmt.Fprintf(&buf, "%03d-%s\n", r.Code, msg)
-			buf.WriteByte('\n')
-		}
-		fmt.Fprintf(&buf, "%03d %s\n", r.Code, r.Messages[len(r.Messages)-1])
-	}
-	return buf.String()
-}
-
 // WriteReply writes a ftp reply.
-func (c *ServerConn) WriteReply(r *Reply) {
+func (c *ServerConn) WriteReply(code int, messages ...string) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
-	c.writeReply(r)
+	c.writeReply(code, messages...)
 }
 
-func (c *ServerConn) writeReply(r *Reply) (int, error) {
-	code := r.Code
-	messages := r.Messages
+func (c *ServerConn) writeReply(code int, messages ...string) (int, error) {
 	if len(messages) == 0 {
 		n, err := fmt.Fprintf(c.ctrl, "%03d \r\n", code)
 		if err != nil {
