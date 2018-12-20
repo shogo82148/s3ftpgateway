@@ -24,6 +24,7 @@ func TestServer(t *testing.T) {
 		"testfile": "Hello ftp!",
 	}))
 	defer ts.Close()
+	ts.Config.Logger = testLogger{t}
 
 	var stdout, stderr bytes.Buffer
 	cmd := exec.Command(curl, "-s", "-v", ts.URL+"/testfile")
@@ -50,6 +51,7 @@ func TestServer_ExplicitTLS(t *testing.T) {
 		"testfile": "Hello ftp!",
 	}))
 	defer ts.Close()
+	ts.Config.Logger = testLogger{t}
 
 	dir, err := ioutil.TempDir("", "ftp-")
 	if err != nil {
@@ -94,6 +96,7 @@ func TestServer_ImplictTLS(t *testing.T) {
 		"testfile": "Hello ftp!",
 	}))
 	defer ts.Close()
+	ts.Config.Logger = testLogger{t}
 
 	dir, err := ioutil.TempDir("", "ftp-")
 	if err != nil {
