@@ -1,0 +1,50 @@
+AWSTemplateFormatVersion: 2010-09-09
+Description: S3 buckets for testing s3ftpgateway
+
+Parameters:
+  Bucket:
+    Type: String
+    Default: shogo82148-s3ftpgateway
+
+Resources:
+  TestBucket:
+    Type: AWS::S3::Bucket
+    DeletionPolicy: Retain
+    Properties:
+      BucketName: !Ref Bucket
+      LifecycleConfiguration:
+        Rules:
+        - ExpirationInDays: 90
+          Status: Enabled
+
+  TestUser:
+    Type: AWS::IAM::User
+    Properties:
+      Policies:
+      - PolicyName: Test
+        PolicyDocument:
+          Version: 2012-10-17
+          Statement:
+          - Effect: Allow
+            Action:
+            - "s3:*"
+            Resource:
+            - !Sub "${TestBucket.Arn}/*"
+          - Effect: Allow
+            Action:
+            - "s3:Get*"
+            - "s3:List*"
+            Resource:
+            - !Sub "${TestBucket.Arn}"
+  TestUserAccessKey:
+    Type: AWS::IAM::AccessKey
+    DependsOn: TestUser
+    Properties:
+      Status: Active
+      UserName: !Ref TestUser
+
+Outputs:
+  AccessKey:
+    Value: !Ref TestUserAccessKey
+  SecretAccessKey:
+    Value: !GetAtt TestUserAccessKey.SecretAccessKey
