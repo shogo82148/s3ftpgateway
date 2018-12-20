@@ -48,10 +48,6 @@ func (c *ServerConn) serve(ctx context.Context) {
 	ctx, cancel := context.WithCancel(ctx)
 	defer cancel()
 
-	// setup control channel
-	c.ctrl = newDumbTelnetConn(c.rwc, c.rwc)
-	c.scanner = bufio.NewScanner(c.ctrl)
-
 	defer c.close()
 
 	c.WriteReply(StatusReady, "Service ready")
@@ -90,7 +86,9 @@ func (c *ServerConn) WriteReply(code int, messages ...string) {
 	}
 	c.mu.Lock()
 	defer c.mu.Unlock()
-	c.writeReply(code, messages...)
+	if _, err := c.writeReply(code, messages...); err != nil {
+		c.server.logger().Printf(c.sessionID, "error: %v", err)
+	}
 }
 
 func (c *ServerConn) writeReply(code int, messages ...string) (int, error) {
@@ -128,6 +126,9 @@ func (c *ServerConn) writeReply(code int, messages ...string) (int, error) {
 	n, err := fmt.Fprintf(c.ctrl, "%03d %s\r\n", code, messages[len(messages)-1])
 	m += n
 	if err != nil {
+		return m, err
+	}
+	if err := c.ctrl.Flush(); err != nil {
 		return m, err
 	}
 	return m, nil
