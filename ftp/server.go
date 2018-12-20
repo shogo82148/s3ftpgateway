@@ -1,6 +1,7 @@
 package ftp
 
 import (
+	"bufio"
 	"context"
 	"crypto/rand"
 	"crypto/tls"
@@ -117,6 +118,10 @@ func (s *Server) newConn(rwc net.Conn) *ServerConn {
 		sessionID: sessionID,
 		rwc:       rwc,
 	}
+
+	// setup control channel
+	c.ctrl = newDumbTelnetConn(c.rwc, c.rwc)
+	c.scanner = bufio.NewScanner(c.ctrl)
 	return c
 }
 
