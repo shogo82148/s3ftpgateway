@@ -6,8 +6,11 @@ import (
 	"crypto/rand"
 	"crypto/tls"
 	"encoding/hex"
+	"errors"
+	"fmt"
 	"io"
 	"net"
+	"sync"
 	"time"
 
 	"github.com/shogo82148/s3ftpgateway/vfs"
@@ -15,17 +18,40 @@ import (
 
 // A Server defines patameters for running a FTP server.
 type Server struct {
-	Addr string // TCP address to listen on, ":ftp" if empty
+	// TCP address for the control connection to listen on, ":ftp" if empty.
+	Addr string
 
-	Authorizer Authorizer // Authorize method
+	// Authorize method
+	Authorizer Authorizer
 
-	FileSystem vfs.FileSystem // Virtual File System
+	// Virtual File System
+	FileSystem vfs.FileSystem
 
+	// TLSConfig optionally provides a TLS configuration for use
+	// by ServeTLS and ListenAndServeTLS. Note that this value is
+	// cloned by ServeTLS and ListenAndServeTLS, so it's not
+	// possible to modify the configuration with methods like
+	// tls.Config.SetSessionTicketKeys.
 	TLSConfig *tls.Config
 
+	// Logger specifies an optional logger.
+	// If nil, logging is done via the log package's standard logger.
 	Logger Logger
 
+	// MinPassivePort is minimum port number for passive data connections.
+	// If MinPassivePort is more than MaxPassivePort, passive more is disabled.
+	MinPassivePort int
+
+	// MaxPassivePort is maximum port number for passive data connections.
+	// If MaxPassivePort is zero, a port number is automatically chosen.
+	MaxPassivePort int
+
 	listener net.Listener
+
+	mu            sync.Mutex
+	ports         []int // ports are available port numbers.
+	idxPorts      []int // inverted index for ports
+	numEmptyPorts int
 }
 
 // ListenAndServe listens on the TCP network address srv.Addr and then calls Serve to handle requests on incoming connections.
@@ -117,6 +143,7 @@ func (s *Server) newConn(rwc net.Conn) *ServerConn {
 		server:    s,
 		sessionID: sessionID,
 		rwc:       rwc,
+		dt:        defaultDataTransfer{},
 	}
 
 	// setup control channel
@@ -143,6 +170,66 @@ func (s *Server) logger() Logger {
 		return StdLogger
 	}
 	return s.Logger
+}
+
+var errPassiveModeIsDisabled = errors.New("ftp: passive mode is disable")
+var errEmptyPortNotFound = errors.New("ftp: empty port not found")
+
+func (s *Server) choosePassivePort() (int, error) {
+	min, max := s.MinPassivePort, s.MaxPassivePort
+	if min > max {
+		return 0, errPassiveModeIsDisabled
+	}
+	if max == 0 {
+		return 0, nil
+	}
+	if min < 0 {
+		min = 0
+	}
+	if max > 65535 {
+		max = 65535
+	}
+
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.ports == nil {
+		s.ports = make([]int, max-min+1)
+		s.idxPorts = make([]int, max-min+1)
+		for i := range s.ports {
+			s.ports[i] = i + min
+			s.idxPorts[i] = i
+		}
+		s.numEmptyPorts = max - min + 1
+	}
+	if s.numEmptyPorts == 0 {
+		return 0, errEmptyPortNotFound
+	}
+
+	idx := cryptorand.Intn(s.numEmptyPorts)
+	s.numEmptyPorts--
+	port1, port2 := s.ports[idx], s.ports[s.numEmptyPorts]
+	s.ports[idx], s.ports[s.numEmptyPorts] = port2, port1
+	s.idxPorts[port1-min], s.idxPorts[port2-min] = s.numEmptyPorts, idx
+	return port1, nil
+}
+
+func (s *Server) releasePassivePort(port int) {
+	if port == 0 {
+		return
+	}
+	min, max := s.MinPassivePort, s.MaxPassivePort
+	if port < min || port > max {
+		panic(fmt.Sprintf("invalid port number %d", port))
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	idx1 := s.idxPorts[port-min]
+	idx2 := s.numEmptyPorts
+	port2 := s.ports[idx2]
+	s.idxPorts[port-min], s.idxPorts[port2-min] = s.idxPorts[port2-min], s.idxPorts[port-min]
+	s.ports[idx1], s.ports[idx2] = s.ports[idx2], s.ports[idx1]
+	s.numEmptyPorts++
 }
 
 // tcpKeepAliveListener sets TCP keep-alive timeouts on accepted

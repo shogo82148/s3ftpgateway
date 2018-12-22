@@ -334,12 +334,13 @@ func (commandEpsv) RequireParam() bool { return false }
 func (commandEpsv) RequireAuth() bool  { return true }
 
 func (commandEpsv) Execute(ctx context.Context, c *ServerConn, cmd *Command) {
-	if dt := c.dt; dt != nil {
-		c.dt = nil
-		dt.Close()
-	}
 	dt, err := c.newPassiveDataTransfer()
 	if err != nil {
+		if err == errPassiveModeIsDisabled {
+			c.WriteReply(StatusNotImplemented, "Passive mode is disabled.")
+			return
+		}
+		c.server.logger().Printf(c.sessionID, "fail to enter passive mode: %v", err)
 		c.WriteReply(StatusCanNotOpenDataConnection, "Data connection failed.")
 		return
 	}
@@ -349,7 +350,6 @@ func (commandEpsv) Execute(ctx context.Context, c *ServerConn, cmd *Command) {
 		c.WriteReply(StatusCanNotOpenDataConnection, "Data connection failed.")
 		return
 	}
-	c.dt = dt
 	c.WriteReply(StatusExtendedPassiveMode, fmt.Sprintf("Entering extended passive mode (|||%s|)", port))
 }
 
