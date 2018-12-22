@@ -41,6 +41,7 @@ type ServerConn struct {
 	// data channel protection level
 	prot protectionLevel
 
+	// a connector for data connection
 	dt dataTransfer
 }
 
