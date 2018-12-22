@@ -36,7 +36,7 @@ func filename(p string) string {
 }
 
 // Open opens the file.
-func (fs *mapFS) Open(ctx context.Context, name string) (vfs.ReadSeekCloser, error) {
+func (fs *mapFS) Open(ctx context.Context, name string) (io.ReadCloser, error) {
 	fs.mu.RLock()
 	defer fs.mu.RUnlock()
 
@@ -166,7 +166,7 @@ func (fs *mapFS) ReadDir(ctx context.Context, path string) ([]os.FileInfo, error
 }
 
 // Create creates the named file, truncating it if it already exists.
-func (fs *mapFS) Create(ctx context.Context, name string) (vfs.WriteSeekCloser, error) {
+func (fs *mapFS) Create(ctx context.Context, name string) (io.WriteCloser, error) {
 	fs.mu.Lock()
 	defer fs.mu.Unlock()
 
@@ -181,75 +181,16 @@ func (fs *mapFS) Create(ctx context.Context, name string) (vfs.WriteSeekCloser, 
 // ErrTooLarge is passed to panic if memory cannot be allocated to store data in a buffer.
 var ErrTooLarge = errors.New("mapfs: too large")
 
-const maxInt = int(^uint(0) >> 1)
-
 type writer struct {
-	buf       []byte
-	bootstrap [64]byte // memory to hold first slice; helps small buffers avoid allocation.
-	offset    int
-	name      string
-	fs        *mapFS
-}
-
-func (w *writer) reserve(n int) {
-	if len(w.buf) >= n {
-		return
-	}
-	if cap(w.buf) >= n {
-		w.buf = w.buf[:n]
-		return
-	}
-
-	// Check if we can make use of bootstrap array.
-	if w.buf == nil && n <= len(w.bootstrap) {
-		w.buf = w.bootstrap[:n]
-		return
-	}
-
-	if n > maxInt-cap(w.buf) {
-		panic(ErrTooLarge)
-	}
-
-	// Not enough space anywhere, we need to allocate.
-	buf := make([]byte, n, n+cap(w.buf))
-	copy(buf, w.buf)
-	w.buf = buf
-}
-
-func (w *writer) Write(b []byte) (int, error) {
-	w.reserve(w.offset + len(b))
-	copy(w.buf[w.offset:], b)
-	w.offset += len(b)
-	return len(b), nil
-}
-
-func (w *writer) Seek(offset int64, whence int) (int64, error) {
-	var abs int64
-	switch whence {
-	case io.SeekStart:
-		abs = offset
-	case io.SeekCurrent:
-		abs = int64(w.offset) + offset
-	case io.SeekEnd:
-		abs = int64(len(w.buf)) + offset
-	default:
-		return 0, errors.New("mapfs: invalid whence")
-	}
-	if abs < 0 {
-		return 0, errors.New("mapfs: negative position")
-	}
-	if abs > int64(maxInt) {
-		panic(ErrTooLarge)
-	}
-	w.offset = int(abs)
-	w.reserve(w.offset)
-	return abs, nil
+	strings.Builder
+	name string
+	fs   *mapFS
 }
 
 func (w *writer) Close() error {
 	w.fs.mu.Lock()
 	defer w.fs.mu.Unlock()
-	w.fs.m[w.name] = string(w.buf)
+	w.fs.m[w.name] = w.Builder.String()
 	return nil
 }
 

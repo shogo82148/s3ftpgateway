@@ -16,7 +16,6 @@ import (
 	"github.com/aws/aws-sdk-go-v2/aws/awserr"
 	"github.com/aws/aws-sdk-go-v2/service/s3"
 	"github.com/aws/aws-sdk-go-v2/service/s3/s3iface"
-	"github.com/shogo82148/s3ftpgateway/vfs"
 )
 
 // FileSystem implements ctxvfs.FileSystem
@@ -58,18 +57,8 @@ func (fs *FileSystem) s3() s3iface.S3API {
 	return fs.s3api
 }
 
-type fileReader struct {
-	*os.File
-}
-
-func (f *fileReader) Close() error {
-	err := f.File.Close()
-	os.Remove(f.File.Name())
-	return err
-}
-
 // Open opens the file.
-func (fs *FileSystem) Open(ctx context.Context, name string) (vfs.ReadSeekCloser, error) {
+func (fs *FileSystem) Open(ctx context.Context, name string) (io.ReadCloser, error) {
 	svc := fs.s3()
 	req := svc.GetObjectRequest(&s3.GetObjectInput{
 		Bucket: aws.String(fs.Bucket),
@@ -100,28 +89,7 @@ func (fs *FileSystem) Open(ctx context.Context, name string) (vfs.ReadSeekCloser
 			Err:  err,
 		}
 	}
-	defer resp.Body.Close()
-
-	tmp, err := ioutil.TempFile("", "s3fs_")
-	if err != nil {
-		return nil, err
-	}
-	f := &fileReader{
-		File: tmp,
-	}
-	defer func() {
-		if err != nil {
-			f.Close()
-		}
-	}()
-
-	if _, err := io.Copy(tmp, resp.Body); err != nil {
-		return nil, err
-	}
-	if _, err := tmp.Seek(0, io.SeekStart); err != nil {
-		return nil, err
-	}
-	return f, nil
+	return resp.Body, nil
 }
 
 // Lstat returns a FileInfo describing the named file.
@@ -330,7 +298,7 @@ func (f *fileWriter) Close() error {
 }
 
 // Create creates the named file, truncating it if it already exists.
-func (fs *FileSystem) Create(ctx context.Context, name string) (vfs.WriteSeekCloser, error) {
+func (fs *FileSystem) Create(ctx context.Context, name string) (io.WriteCloser, error) {
 	stat, err := fs.Lstat(ctx, name)
 	if err != nil {
 		if !os.IsNotExist(err) {
