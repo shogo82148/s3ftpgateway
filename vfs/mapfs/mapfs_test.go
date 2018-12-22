@@ -173,24 +173,8 @@ func TestCreate(t *testing.T) {
 	if n != len("hello") {
 		t.Errorf("got %d, want %d", n, len("hello"))
 	}
-
-	// Seek
-	if n, err := w.Seek(0, io.SeekStart); err != nil {
-		t.Fatal("unexpected error: ", err)
-	} else if n != 0 {
-		t.Errorf("got %d, want %d", n, 0)
-	}
-	io.WriteString(w, "H")
-
-	if n, err := w.Seek(0, io.SeekEnd); err != nil {
-		t.Fatal("unexpected error: ", err)
-	} else if n != int64(len("hello")) {
-		t.Errorf("got %d, want %d", n, len("hello"))
-	}
-	io.WriteString(w, " World")
-
 	if err := w.Close(); err != nil {
-		t.Fatal("unexpected error: ", err)
+		t.Fatal(err)
 	}
 
 	// Check the content of th file.
@@ -199,7 +183,7 @@ func TestCreate(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if string(slurp) != "Hello World" {
+	if string(slurp) != "hello" {
 		t.Errorf("got %s, want Hello World", string(slurp))
 	}
 }

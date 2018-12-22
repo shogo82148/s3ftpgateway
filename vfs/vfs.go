@@ -13,7 +13,7 @@ import (
 // file system.
 type FileSystem interface {
 	// Open opens the named file.
-	Open(ctx context.Context, name string) (ReadSeekCloser, error)
+	Open(ctx context.Context, name string) (io.ReadCloser, error)
 
 	// Lstat returns a FileInfo describing the named file.
 	Lstat(ctx context.Context, path string) (os.FileInfo, error)
@@ -25,7 +25,7 @@ type FileSystem interface {
 	ReadDir(ctx context.Context, path string) ([]os.FileInfo, error)
 
 	// Create creates the named file, truncating it if it already exists.
-	Create(ctx context.Context, name string) (WriteSeekCloser, error)
+	Create(ctx context.Context, name string) (io.WriteCloser, error)
 
 	// Mkdir creates a new directory. If name is already a directory, Mkdir
 	// returns an error (that can be detected using os.IsExist).
@@ -35,18 +35,4 @@ type FileSystem interface {
 	Remove(ctx context.Context, name string) error
 
 	String() string
-}
-
-// A ReadSeekCloser can Read, Seek, and Close.
-type ReadSeekCloser interface {
-	io.Reader
-	io.Seeker
-	io.Closer
-}
-
-// A WriteSeekCloser can Write, Seek, and Close.
-type WriteSeekCloser interface {
-	io.Writer
-	io.Seeker
-	io.Closer
 }
