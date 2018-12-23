@@ -268,7 +268,7 @@ func (commandRetr) Execute(ctx context.Context, c *ServerConn, cmd *Command) {
 type commandStor struct{}
 
 func (commandStor) IsExtend() bool     { return false }
-func (commandStor) RequireParam() bool { return false }
+func (commandStor) RequireParam() bool { return true }
 func (commandStor) RequireAuth() bool  { return true }
 
 func (commandStor) Execute(ctx context.Context, c *ServerConn, cmd *Command) {
