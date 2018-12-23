@@ -166,31 +166,37 @@ func (fs *mapFS) ReadDir(ctx context.Context, path string) ([]os.FileInfo, error
 }
 
 // Create creates the named file, truncating it if it already exists.
-func (fs *mapFS) Create(ctx context.Context, name string) (io.WriteCloser, error) {
+func (fs *mapFS) Create(ctx context.Context, name string, body io.Reader) error {
+	var buf strings.Builder
+	_, err := io.Copy(&buf, body)
+	if err != nil {
+		return err
+	}
+
 	fs.mu.Lock()
 	defer fs.mu.Unlock()
 
+	// check that there is a directory which has same name.
+	nameslash := name + "/"
+	if _, ok := fs.m[nameslash]; ok {
+		return &os.PathError{
+			Op:   "create",
+			Path: filename(name),
+			Err:  os.ErrExist,
+		}
+	}
+	for fn := range fs.m {
+		if strings.HasPrefix(fn, nameslash) {
+			return &os.PathError{
+				Op:   "create",
+				Path: filename(name),
+				Err:  os.ErrExist,
+			}
+		}
+	}
+
 	name = filename(name)
-	fs.m[name] = ""
-	return &writer{
-		name: name,
-		fs:   fs,
-	}, nil
-}
-
-// ErrTooLarge is passed to panic if memory cannot be allocated to store data in a buffer.
-var ErrTooLarge = errors.New("mapfs: too large")
-
-type writer struct {
-	strings.Builder
-	name string
-	fs   *mapFS
-}
-
-func (w *writer) Close() error {
-	w.fs.mu.Lock()
-	defer w.fs.mu.Unlock()
-	w.fs.m[w.name] = w.Builder.String()
+	fs.m[name] = buf.String()
 	return nil
 }
 
