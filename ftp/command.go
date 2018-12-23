@@ -200,8 +200,16 @@ func (commandPort) Execute(ctx context.Context, c *ServerConn, cmd *Command) {
 		}
 		nums = append(nums, n)
 	}
+	port := (nums[4] << 8) + nums[5]
 
-	_, err := c.newActiveDataTransfer(ctx, fmt.Sprintf("%d.%d.%d.%d:%d", nums[0], nums[1], nums[2], nums[3], (nums[4]<<8)+nums[5]))
+	// https://tools.ietf.org/html/rfc2577
+	// Protecting Against the Bounce Attack
+	if port < 1024 || port > 65535 {
+		c.WriteReply(StatusNotImplemented, "Command not implemented for that parameter.")
+		return
+	}
+
+	_, err := c.newActiveDataTransfer(ctx, fmt.Sprintf("%d.%d.%d.%d:%d", nums[0], nums[1], nums[2], nums[3], port))
 	if err != nil {
 		c.server.logger().Printf(c.sessionID, "fail to enter active mode: %v", err)
 		c.WriteReply(StatusCanNotOpenDataConnection, "Data connection failed.")
@@ -448,6 +456,14 @@ func (commandEprt) Execute(ctx context.Context, c *ServerConn, cmd *Command) {
 		c.WriteReply(StatusBadArguments, "Invalid port number.")
 		return
 	}
+
+	// https://tools.ietf.org/html/rfc2577
+	// Protecting Against the Bounce Attack
+	if portNum < 1024 || portNum > 65535 {
+		c.WriteReply(StatusNotImplemented, "Command not implemented for that parameter.")
+		return
+	}
+
 	_, err = c.newActiveDataTransfer(ctx, fmt.Sprintf("%s:%d", ip.String(), portNum))
 	if err != nil {
 		c.server.logger().Printf(c.sessionID, "fail to enter active mode: %v", err)
