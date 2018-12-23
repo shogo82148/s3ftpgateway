@@ -148,7 +148,7 @@ func (commandPass) Execute(ctx context.Context, c *ServerConn, cmd *Command) {
 type commandPasv struct{}
 
 func (commandPasv) IsExtend() bool     { return false }
-func (commandPasv) RequireParam() bool { return true }
+func (commandPasv) RequireParam() bool { return false }
 func (commandPasv) RequireAuth() bool  { return true }
 
 func (commandPasv) Execute(ctx context.Context, c *ServerConn, cmd *Command) {
