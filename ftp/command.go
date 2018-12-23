@@ -411,6 +411,19 @@ func (commandEpsv) RequireParam() bool { return false }
 func (commandEpsv) RequireAuth() bool  { return true }
 
 func (commandEpsv) Execute(ctx context.Context, c *ServerConn, cmd *Command) {
+	if strings.EqualFold(cmd.Arg, "all") {
+		c.epsvAll = true
+		c.WriteReply(StatusReady, "all data connection setup commands other than EPSV is disabled.")
+		return
+	}
+	switch cmd.Arg {
+	case "":
+	case "1": // IPv4 Address
+	case "2": // IPv6 Address
+	default:
+		c.WriteReply(StatusBadArguments, "Invalid arguments.")
+		return
+	}
 	dt, err := c.newPassiveDataTransfer()
 	if err != nil {
 		if err == errPassiveModeIsDisabled {

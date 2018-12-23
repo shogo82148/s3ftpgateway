@@ -44,6 +44,11 @@ type ServerConn struct {
 
 	// a connector for data connection
 	dt dataTransfer
+
+	// use EPSV command for starting data connection.
+	// if it is true, reject all data connection
+	// setup commands other than EPSV (i.e., EPRT, PORT, PASV, et al.)
+	epsvAll bool
 }
 
 func (c *ServerConn) serve(ctx context.Context) {
