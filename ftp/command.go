@@ -60,7 +60,7 @@ var commands = map[string]command{
 	"NOOP": nil,
 	"MODE": nil,
 	"PASS": commandPass{},
-	"PASV": nil,
+	"PASV": commandPasv{},
 	"PORT": nil,
 	"PWD":  commandPwd{},
 	"QUIT": commandQuit{},
@@ -144,6 +144,31 @@ func (commandPass) Execute(ctx context.Context, c *ServerConn, cmd *Command) {
 	}
 	c.auth = auth
 	c.WriteReply(StatusLoggedIn, "User logged in, proceed.")
+}
+
+type commandPasv struct{}
+
+func (commandPasv) IsExtend() bool     { return false }
+func (commandPasv) RequireParam() bool { return true }
+func (commandPasv) RequireAuth() bool  { return true }
+
+func (commandPasv) Execute(ctx context.Context, c *ServerConn, cmd *Command) {
+	ipv4 := c.publicIPv4()
+	if ipv4 == nil {
+		c.WriteReply(StatusNotImplemented, "PASV command is disabled.")
+	}
+	dt, err := c.newPassiveDataTransfer()
+	if err != nil {
+		if err == errPassiveModeIsDisabled {
+			c.WriteReply(StatusNotImplemented, "Passive mode is disabled.")
+			return
+		}
+		c.server.logger().Printf(c.sessionID, "fail to enter passive mode: %v", err)
+		c.WriteReply(StatusCanNotOpenDataConnection, "Data connection failed.")
+		return
+	}
+	addr := dt.l.Addr().(*net.TCPAddr)
+	c.WriteReply(StatusPassiveMode, fmt.Sprintf("Entering Passive Mode (%d,%d,%d,%d,%d,%d)", ipv4[0], ipv4[1], ipv4[2], ipv4[3], addr.Port>>8, addr.Port&0xFF))
 }
 
 type commandPwd struct{}
@@ -379,13 +404,8 @@ func (commandEpsv) Execute(ctx context.Context, c *ServerConn, cmd *Command) {
 		c.WriteReply(StatusCanNotOpenDataConnection, "Data connection failed.")
 		return
 	}
-	_, port, err := net.SplitHostPort(dt.l.Addr().String())
-	if err != nil {
-		dt.Close()
-		c.WriteReply(StatusCanNotOpenDataConnection, "Data connection failed.")
-		return
-	}
-	c.WriteReply(StatusExtendedPassiveMode, fmt.Sprintf("Entering extended passive mode (|||%s|)", port))
+	addr := dt.l.Addr().(*net.TCPAddr)
+	c.WriteReply(StatusExtendedPassiveMode, fmt.Sprintf("Entering extended passive mode (|||%d|)", addr.Port))
 }
 
 // Extensions to FTP

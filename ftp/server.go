@@ -46,6 +46,9 @@ type Server struct {
 	// If MaxPassivePort is zero, a port number is automatically chosen.
 	MaxPassivePort int
 
+	// PublicIPs are public IPs.
+	PublicIPs []string
+
 	listener net.Listener
 
 	mu            sync.Mutex
