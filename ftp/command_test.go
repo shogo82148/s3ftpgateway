@@ -291,6 +291,9 @@ my $host = shift;
 my $ftp = Net::FTP->new($host, Debug => 1) or die "fail to connect ftp server: $@";
 ok $ftp->login('anonymous', 'foobar@example.com'), 'login';
 
+if (!$ftp->can('eprt')) {
+	plan skip_all => 'eprt is not support';
+}
 ok $ftp->eprt(), 'eprt';
 ok my $fh = $ftp->retr('testfile'), 'retr';
 my $content = do { local $/ = ''; <$fh>};
