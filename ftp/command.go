@@ -7,6 +7,7 @@ import (
 	"net"
 	"strconv"
 	"strings"
+	"time"
 )
 
 // Command is a ftp command.
@@ -45,7 +46,7 @@ type command interface {
 var commands = map[string]command{
 	// FILE TRANSFER PROTOCOL (FTP)
 	// https://tools.ietf.org/html/rfc959
-	"ABOR": nil,
+	"ABOR": commandAbor{},
 	"ACCT": nil,
 	"ALLO": nil,
 	"APPE": nil,
@@ -117,6 +118,16 @@ var commands = map[string]command{
 	"SIZE": commandSize{},
 }
 
+type commandAbor struct{}
+
+func (commandAbor) IsExtend() bool     { return false }
+func (commandAbor) RequireParam() bool { return true }
+func (commandAbor) RequireAuth() bool  { return false }
+
+func (commandAbor) Execute(ctx context.Context, c *ServerConn, cmd *Command) {
+	c.dt.Abort()
+}
+
 type commandPass struct{}
 
 func (commandPass) IsExtend() bool     { return false }
@@ -167,31 +178,44 @@ func (commandRetr) IsExtend() bool     { return false }
 func (commandRetr) RequireParam() bool { return true }
 func (commandRetr) RequireAuth() bool  { return true }
 
-func (commandRetr) Execute(ctx context.Context, c *ServerConn, cmd *Command) {
-	f, err := c.fileSystem().Open(ctx, cmd.Arg)
+func (retr commandRetr) Execute(ctx context.Context, c *ServerConn, cmd *Command) {
+	f, err := retr.open(ctx, c, cmd.Arg)
 	if err != nil {
 		c.WriteReply(StatusBadFileName, "Requested action not taken.")
 		return
 	}
-	defer f.Close()
-
 	c.WriteReply(StatusAboutToSend, "File status okay; about to open data connection.")
-	conn, err := c.dt.Conn(ctx)
-	if err != nil {
-		c.WriteReply(StatusTransfertAborted, "Requested file action aborted.")
-		return
-	}
-	n, err := io.Copy(conn, f)
-	if err != nil {
-		c.WriteReply(StatusActionAborted, "Requested file action aborted.")
-		return
-	}
 
-	c.WriteReply(StatusClosingDataConnection, fmt.Sprintf("Data transfer starting %d bytes", n))
-	if dt := c.dt; dt != nil {
-		c.dt = nil
-		dt.Close()
-	}
+	dt := c.dt
+	go func() {
+		defer f.Close()
+		conn, err := retr.conn(ctx, dt)
+		if err != nil {
+			c.WriteReply(StatusTransfertAborted, "Requested file action aborted.")
+			return
+		}
+		defer conn.Close()
+
+		n, err := io.Copy(conn, f)
+		if err != nil {
+			c.WriteReply(StatusActionAborted, "Requested file action aborted.")
+			return
+		}
+
+		c.WriteReply(StatusClosingDataConnection, fmt.Sprintf("Data transfer starting %d bytes", n))
+	}()
+}
+
+func (commandRetr) open(ctx context.Context, c *ServerConn, name string) (io.ReadCloser, error) {
+	ctx, cancel := context.WithTimeout(ctx, time.Minute)
+	defer cancel()
+	return c.fileSystem().Open(ctx, name)
+}
+
+func (commandRetr) conn(ctx context.Context, dt dataTransfer) (net.Conn, error) {
+	ctx, cancel := context.WithTimeout(ctx, time.Minute)
+	defer cancel()
+	return dt.Conn(ctx)
 }
 
 // commandStor
@@ -224,10 +248,6 @@ func (commandStor) Execute(ctx context.Context, c *ServerConn, cmd *Command) {
 		return
 	}
 	c.WriteReply(StatusClosingDataConnection, fmt.Sprintf("OK, received %d bytes.", n))
-	if dt := c.dt; dt != nil {
-		c.dt = nil
-		dt.Close()
-	}
 }
 
 // commandType

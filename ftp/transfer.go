@@ -14,7 +14,10 @@ type dataTransfer interface {
 	// If the connection is closed, Conn returns new connection next time.
 	Conn(ctx context.Context) (net.Conn, error)
 
-	// Close closes the currect data connection.
+	// Abort force closes current data connection.
+	Abort() error
+
+	// Close closes the data transfer.
 	Close() error
 }
 
@@ -23,6 +26,10 @@ type defaultDataTransfer struct{}
 func (defaultDataTransfer) Conn(ctx context.Context) (net.Conn, error) {
 	// TODO:
 	return nil, net.UnknownNetworkError("not implemented")
+}
+
+func (defaultDataTransfer) Abort() error {
+	return nil
 }
 
 func (defaultDataTransfer) Close() error {
@@ -151,6 +158,17 @@ func (t *passiveDataTransfer) Conn(ctx context.Context) (net.Conn, error) {
 	case <-ctx.Done():
 		return nil, ctx.Err()
 	}
+}
+
+func (t *passiveDataTransfer) Abort() error {
+	var conn net.Conn
+	t.mu.Lock()
+	conn = t.conn
+	t.mu.Unlock()
+	if conn != nil {
+		return conn.Close()
+	}
+	return nil
 }
 
 func (t *passiveDataTransfer) Close() error {
