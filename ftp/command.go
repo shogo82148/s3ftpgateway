@@ -413,7 +413,43 @@ func (commandEprt) Execute(ctx context.Context, c *ServerConn, cmd *Command) {
 		return
 	}
 
-	c.WriteReply(StatusNotImplemented, "Command not implemented.")
+	delem := cmd.Arg[:1]
+	params := strings.Split(cmd.Arg, delem)
+	if len(params) < 5 {
+		c.WriteReply(StatusBadArguments, "Syntax error.")
+		return
+	}
+	proto := params[1]
+	addr := params[2]
+	port := params[3]
+
+	var addrLen int
+	switch proto {
+	case "1": // IP v4
+		addrLen = net.IPv4len
+	case "2": // IP v6
+		addrLen = net.IPv6len
+	default:
+		c.WriteReply(StatusNetworkProtoNotSupported, "Network protocol not supported, use (1,2)")
+		return
+	}
+	ip := net.ParseIP(addr)
+	if len(ip) != addrLen {
+		c.WriteReply(StatusBadArguments, "Invalid address.")
+		return
+	}
+	portNum, err := strconv.Atoi(port)
+	if err != nil {
+		c.WriteReply(StatusBadArguments, "Invalid port number.")
+		return
+	}
+	_, err = c.newActiveDataTransfer(ctx, fmt.Sprintf("%s:%d", ip.String(), portNum))
+	if err != nil {
+		c.server.logger().Printf(c.sessionID, "fail to enter active mode: %v", err)
+		c.WriteReply(StatusCanNotOpenDataConnection, "Data connection failed.")
+		return
+	}
+	c.WriteReply(StatusCommandOK, "Okay.")
 }
 
 // commandEpsv requests that a server listen on a data port and wait for a connection
