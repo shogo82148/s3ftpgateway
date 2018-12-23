@@ -152,6 +152,10 @@ func (commandPasv) RequireParam() bool { return false }
 func (commandPasv) RequireAuth() bool  { return true }
 
 func (commandPasv) Execute(ctx context.Context, c *ServerConn, cmd *Command) {
+	if c.epsvAll {
+		c.WriteReply(StatusBadArguments, "PASV command is disabled.")
+		return
+	}
 	ipv4 := c.publicIPv4()
 	if ipv4 == nil {
 		c.WriteReply(StatusNotImplemented, "PASV command is disabled.")
@@ -177,6 +181,11 @@ func (commandPort) RequireParam() bool { return true }
 func (commandPort) RequireAuth() bool  { return true }
 
 func (commandPort) Execute(ctx context.Context, c *ServerConn, cmd *Command) {
+	if c.epsvAll {
+		c.WriteReply(StatusBadArguments, "PORT command is disabled.")
+		return
+	}
+
 	args := strings.Split(cmd.Arg, ",")
 	if len(args) != 6 {
 		c.WriteReply(StatusBadArguments, "Syntax error.")
@@ -399,6 +408,11 @@ func (commandEprt) RequireParam() bool { return true }
 func (commandEprt) RequireAuth() bool  { return true }
 
 func (commandEprt) Execute(ctx context.Context, c *ServerConn, cmd *Command) {
+	if c.epsvAll {
+		c.WriteReply(StatusBadArguments, "EPRT command is disabled.")
+		return
+	}
+
 	c.WriteReply(StatusNotImplemented, "Command not implemented.")
 }
 
