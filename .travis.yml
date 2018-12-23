@@ -6,4 +6,4 @@ go:
 os:
   - linux
   - osx
-  - windows
+  # - windows # go get fails on windows. why??? https://travis-ci.com/shogo82148/s3ftpgateway/jobs/166842634
