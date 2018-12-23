@@ -225,29 +225,44 @@ func (commandStor) IsExtend() bool     { return false }
 func (commandStor) RequireParam() bool { return false }
 func (commandStor) RequireAuth() bool  { return true }
 
-func (commandStor) Execute(ctx context.Context, c *ServerConn, cmd *Command) {
-	f, err := c.fileSystem().Create(ctx, cmd.Arg)
-	if err != nil {
-		c.WriteReply(StatusBadFileName, "Requested action not taken.")
-		return
-	}
+func (stor commandStor) Execute(ctx context.Context, c *ServerConn, cmd *Command) {
 	c.WriteReply(StatusAboutToSend, "Data transfer starting")
 
-	conn, err := c.dt.Conn(ctx)
-	if err != nil {
-		c.WriteReply(StatusTransfertAborted, "Requested file action aborted.")
-		return
-	}
-	n, err := io.Copy(f, conn)
-	if err != nil {
-		c.WriteReply(StatusActionAborted, "Requested file action aborted.")
-		return
-	}
-	if err := f.Close(); err != nil {
-		c.WriteReply(StatusActionAborted, "Requested file action aborted.")
-		return
-	}
-	c.WriteReply(StatusClosingDataConnection, fmt.Sprintf("OK, received %d bytes.", n))
+	dt := c.dt
+	name := cmd.Arg
+	go func() {
+		conn, err := stor.conn(ctx, dt)
+		if err != nil {
+			c.WriteReply(StatusTransfertAborted, "Requested file action aborted.")
+			return
+		}
+		defer conn.Close()
+
+		r := &countReader{Reader: conn}
+		err = c.fileSystem().Create(ctx, name, conn)
+		if err != nil {
+			c.WriteReply(StatusActionAborted, "Requested file action aborted.")
+			return
+		}
+		c.WriteReply(StatusClosingDataConnection, fmt.Sprintf("OK, received %d bytes.", r.count))
+	}()
+}
+
+func (commandStor) conn(ctx context.Context, dt dataTransfer) (net.Conn, error) {
+	ctx, cancel := context.WithTimeout(ctx, time.Minute)
+	defer cancel()
+	return dt.Conn(ctx)
+}
+
+type countReader struct {
+	io.Reader
+	count int64
+}
+
+func (r *countReader) Read(b []byte) (int, error) {
+	n, err := r.Reader.Read(b)
+	r.count += int64(n)
+	return n, err
 }
 
 // commandType
