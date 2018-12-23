@@ -70,3 +70,8 @@ const (
 	StatusPrivateReply                       = 632 // Confidentiality and integrity protected reply.
 	StatusConfidentialReply                  = 633 // Confidentiality protected reply.
 )
+
+// Extra FTP Status codes defined in RFC 2428 https://tools.ietf.org/html/rfc2428
+const (
+	StatusNetworkProtoNotSupported = 522 // Network protocol not supported
+)

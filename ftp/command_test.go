@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"io"
 	"io/ioutil"
-	"log"
 	"net/url"
 	"os"
 	"os/exec"
@@ -103,6 +102,73 @@ func (perl *perlExecutor) Prove(ctx context.Context, t *testing.T, script string
 	}
 }
 
+func TestPortPasv(t *testing.T) {
+	perl, err := newPerlExecutor()
+	if err != nil {
+		t.Skipf("perl is required for this test: %v", err)
+		return
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+
+	ts1 := ftptest.NewServer(mapfs.New(map[string]string{
+		"testfile": "Hello ftp!",
+	}))
+	defer ts1.Close()
+	ts1.Config.Logger = testLogger{t}
+	u1, err := url.Parse(ts1.URL)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	fs := mapfs.New(map[string]string{})
+	ts2 := ftptest.NewServer(fs)
+	defer ts2.Close()
+	ts2.Config.Logger = testLogger{t}
+	u2, err := url.Parse(ts2.URL)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	script := `use utf8;
+use strict;
+use warnings;
+use Test::More;
+use Net::FTP;
+use Net::Cmd;
+
+my $host1 = shift;
+my $host2 = shift;
+my $src = Net::FTP->new($host1, Debug => 1) or die "fail to connect ftp server: $@";
+ok $src->login('anonymous', 'foobar@example.com'), 'login';
+my $dst = Net::FTP->new($host2, Debug => 1) or die "fail to connect ftp server: $@";
+ok $dst->login('anonymous', 'foobar@example.com'), 'login';
+ok my $port = $src->pasv(), 'pasv';
+ok $dst->port($port), 'port';
+ok $dst->stor('testfile');
+ok $src->retr('testfile');
+is $src->response, Net::Cmd::CMD_INFO, 'response';
+ok $dst->pasv_wait($src);
+ok $src->quit(), 'quit';
+ok $dst->quit(), 'quit';
+done_testing;
+`
+	perl.Prove(ctx, t, script, u1.Host, u2.Host)
+
+	r, err := fs.Open(ctx, "testfile")
+	if err != nil {
+		t.Fatal(err)
+	}
+	b, err := ioutil.ReadAll(r)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if string(b) != "Hello ftp!" {
+		t.Errorf("want Hello ftp!, got %s", b)
+	}
+}
+
 func TestRetr(t *testing.T) {
 	perl, err := newPerlExecutor()
 	if err != nil {
@@ -194,22 +260,70 @@ done_testing;
 	}
 }
 
+func TestEprt(t *testing.T) {
+	perl, err := newPerlExecutor()
+	if err != nil {
+		t.Skipf("perl is required for this test: %v", err)
+		return
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+
+	ts := ftptest.NewServer(mapfs.New(map[string]string{
+		"testfile": "Hello ftp!",
+	}))
+	defer ts.Close()
+	ts.Config.Logger = testLogger{t}
+
+	u, err := url.Parse(ts.URL)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	script := `use utf8;
+use strict;
+use warnings;
+use Test::More;
+use Net::FTP;
+
+my $host = shift;
+my $ftp = Net::FTP->new($host, Debug => 1) or die "fail to connect ftp server: $@";
+ok $ftp->login('anonymous', 'foobar@example.com'), 'login';
+
+if (!$ftp->can('eprt')) {
+	plan skip_all => 'eprt is not support';
+}
+ok $ftp->eprt(), 'eprt';
+ok my $fh = $ftp->retr('testfile'), 'retr';
+my $content = do { local $/ = ''; <$fh>};
+is $content, 'Hello ftp!', 'content';
+ok $ftp->quit(), 'quit';
+done_testing;
+`
+	perl.Prove(ctx, t, script, u.Host)
+}
+
 type testLogger struct {
 	t *testing.T
 }
 
 func (l testLogger) Print(sessionID string, message interface{}) {
+	l.t.Helper()
 	l.t.Logf("%s  %s", sessionID, message)
 }
 
 func (l testLogger) Printf(sessionID string, format string, v ...interface{}) {
+	l.t.Helper()
 	l.t.Log(sessionID, fmt.Sprintf(format, v...))
 }
 
 func (l testLogger) PrintCommand(sessionID string, command string, params string) {
+	l.t.Helper()
 	l.t.Logf("%s > %s %s", sessionID, command, params)
 }
 
 func (l testLogger) PrintResponse(sessionID string, code int, message string) {
-	log.Printf("%s < %d %s", sessionID, code, message)
+	l.t.Helper()
+	l.t.Logf("%s < %d %s", sessionID, code, message)
 }

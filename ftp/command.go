@@ -200,8 +200,16 @@ func (commandPort) Execute(ctx context.Context, c *ServerConn, cmd *Command) {
 		}
 		nums = append(nums, n)
 	}
+	port := (nums[4] << 8) + nums[5]
 
-	_, err := c.newActiveDataTransfer(ctx, fmt.Sprintf("%d.%d.%d.%d:%d", nums[0], nums[1], nums[2], nums[3], (nums[4]<<8)+nums[5]))
+	// https://tools.ietf.org/html/rfc2577
+	// Protecting Against the Bounce Attack
+	if port < 1024 || port > 65535 {
+		c.WriteReply(StatusNotImplemented, "Command not implemented for that parameter.")
+		return
+	}
+
+	_, err := c.newActiveDataTransfer(ctx, fmt.Sprintf("%d.%d.%d.%d:%d", nums[0], nums[1], nums[2], nums[3], port))
 	if err != nil {
 		c.server.logger().Printf(c.sessionID, "fail to enter active mode: %v", err)
 		c.WriteReply(StatusCanNotOpenDataConnection, "Data connection failed.")
@@ -294,7 +302,7 @@ func (commandStor) Execute(ctx context.Context, c *ServerConn, cmd *Command) {
 	go func() {
 		defer conn.Close()
 		r := &countReader{Reader: conn}
-		err = c.fileSystem().Create(context.Background(), name, conn)
+		err = c.fileSystem().Create(context.Background(), name, r)
 		if err != nil {
 			c.server.logger().Printf(c.sessionID, "fail to store file: %v", err)
 			c.WriteReply(StatusActionAborted, "Requested file action aborted.")
@@ -413,7 +421,56 @@ func (commandEprt) Execute(ctx context.Context, c *ServerConn, cmd *Command) {
 		return
 	}
 
-	c.WriteReply(StatusNotImplemented, "Command not implemented.")
+	delem := cmd.Arg[:1]
+	params := strings.Split(cmd.Arg, delem)
+	if len(params) < 5 {
+		c.WriteReply(StatusBadArguments, "Syntax error.")
+		return
+	}
+	proto := params[1]
+	addr := params[2]
+	port := params[3]
+
+	var ip net.IP
+	switch proto {
+	case "1": // IP v4
+		ip = net.ParseIP(addr)
+		if ip != nil {
+			ip = ip.To4()
+		}
+	case "2": // IP v6
+		ip = net.ParseIP(addr)
+		if ip != nil {
+			ip = ip.To16()
+		}
+	default:
+		c.WriteReply(StatusNetworkProtoNotSupported, "Network protocol not supported, use (1,2)")
+		return
+	}
+	if ip == nil {
+		c.WriteReply(StatusBadArguments, "Invalid address.")
+		return
+	}
+	portNum, err := strconv.Atoi(port)
+	if err != nil {
+		c.WriteReply(StatusBadArguments, "Invalid port number.")
+		return
+	}
+
+	// https://tools.ietf.org/html/rfc2577
+	// Protecting Against the Bounce Attack
+	if portNum < 1024 || portNum > 65535 {
+		c.WriteReply(StatusNotImplemented, "Command not implemented for that parameter.")
+		return
+	}
+
+	_, err = c.newActiveDataTransfer(ctx, fmt.Sprintf("%s:%d", ip.String(), portNum))
+	if err != nil {
+		c.server.logger().Printf(c.sessionID, "fail to enter active mode: %v", err)
+		c.WriteReply(StatusCanNotOpenDataConnection, "Data connection failed.")
+		return
+	}
+	c.WriteReply(StatusCommandOK, "Okay.")
 }
 
 // commandEpsv requests that a server listen on a data port and wait for a connection
