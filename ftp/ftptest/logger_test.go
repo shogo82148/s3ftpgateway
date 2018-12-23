@@ -2,7 +2,6 @@ package ftptest
 
 import (
 	"fmt"
-	"log"
 	"testing"
 )
 
@@ -27,5 +26,5 @@ func (l testLogger) PrintCommand(sessionID string, command string, params string
 
 func (l testLogger) PrintResponse(sessionID string, code int, message string) {
 	l.t.Helper()
-	log.Printf("%s < %d %s", sessionID, code, message)
+	l.t.Logf("%s < %d %s", sessionID, code, message)
 }

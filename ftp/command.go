@@ -294,7 +294,7 @@ func (commandStor) Execute(ctx context.Context, c *ServerConn, cmd *Command) {
 	go func() {
 		defer conn.Close()
 		r := &countReader{Reader: conn}
-		err = c.fileSystem().Create(context.Background(), name, conn)
+		err = c.fileSystem().Create(context.Background(), name, r)
 		if err != nil {
 			c.server.logger().Printf(c.sessionID, "fail to store file: %v", err)
 			c.WriteReply(StatusActionAborted, "Requested file action aborted.")

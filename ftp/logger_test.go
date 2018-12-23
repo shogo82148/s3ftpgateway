@@ -2,7 +2,6 @@ package ftp
 
 import (
 	"fmt"
-	"log"
 	"testing"
 )
 
@@ -11,17 +10,21 @@ type testLogger struct {
 }
 
 func (l testLogger) Print(sessionID string, message interface{}) {
+	l.t.Helper()
 	l.t.Logf("%s  %s", sessionID, message)
 }
 
 func (l testLogger) Printf(sessionID string, format string, v ...interface{}) {
+	l.t.Helper()
 	l.t.Log(sessionID, fmt.Sprintf(format, v...))
 }
 
 func (l testLogger) PrintCommand(sessionID string, command string, params string) {
+	l.t.Helper()
 	l.t.Logf("%s > %s %s", sessionID, command, params)
 }
 
 func (l testLogger) PrintResponse(sessionID string, code int, message string) {
-	log.Printf("%s < %d %s", sessionID, code, message)
+	l.t.Helper()
+	l.t.Logf("%s < %d %s", sessionID, code, message)
 }
