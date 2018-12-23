@@ -60,8 +60,8 @@ var commands = map[string]command{
 	"NOOP": nil,
 	"MODE": nil,
 	"PASS": commandPass{},
-	"PASV": nil,
-	"PORT": nil,
+	"PASV": commandPasv{},
+	"PORT": commandPort{},
 	"PWD":  commandPwd{},
 	"QUIT": commandQuit{},
 	"REIN": nil,
@@ -144,6 +144,62 @@ func (commandPass) Execute(ctx context.Context, c *ServerConn, cmd *Command) {
 	}
 	c.auth = auth
 	c.WriteReply(StatusLoggedIn, "User logged in, proceed.")
+}
+
+type commandPasv struct{}
+
+func (commandPasv) IsExtend() bool     { return false }
+func (commandPasv) RequireParam() bool { return true }
+func (commandPasv) RequireAuth() bool  { return true }
+
+func (commandPasv) Execute(ctx context.Context, c *ServerConn, cmd *Command) {
+	ipv4 := c.publicIPv4()
+	if ipv4 == nil {
+		c.WriteReply(StatusNotImplemented, "PASV command is disabled.")
+	}
+	dt, err := c.newPassiveDataTransfer()
+	if err != nil {
+		if err == errPassiveModeIsDisabled {
+			c.WriteReply(StatusNotImplemented, "Passive mode is disabled.")
+			return
+		}
+		c.server.logger().Printf(c.sessionID, "fail to enter passive mode: %v", err)
+		c.WriteReply(StatusCanNotOpenDataConnection, "Data connection failed.")
+		return
+	}
+	addr := dt.l.Addr().(*net.TCPAddr)
+	c.WriteReply(StatusPassiveMode, fmt.Sprintf("Entering Passive Mode (%d,%d,%d,%d,%d,%d)", ipv4[0], ipv4[1], ipv4[2], ipv4[3], addr.Port>>8, addr.Port&0xFF))
+}
+
+type commandPort struct{}
+
+func (commandPort) IsExtend() bool     { return false }
+func (commandPort) RequireParam() bool { return true }
+func (commandPort) RequireAuth() bool  { return true }
+
+func (commandPort) Execute(ctx context.Context, c *ServerConn, cmd *Command) {
+	args := strings.Split(cmd.Arg, ",")
+	if len(args) != 6 {
+		c.WriteReply(StatusBadArguments, "Syntax error.")
+		return
+	}
+	nums := make([]int, 0, 6)
+	for _, s := range args {
+		n, err := strconv.Atoi(strings.TrimSpace(s))
+		if err != nil {
+			c.WriteReply(StatusBadArguments, "Syntax error.")
+			return
+		}
+		nums = append(nums, n)
+	}
+
+	_, err := c.newActiveDataTransfer(ctx, fmt.Sprintf("%d.%d.%d.%d:%d", nums[0], nums[1], nums[2], nums[3], (nums[4]<<8)+nums[5]))
+	if err != nil {
+		c.server.logger().Printf(c.sessionID, "fail to enter active mode: %v", err)
+		c.WriteReply(StatusCanNotOpenDataConnection, "Data connection failed.")
+		return
+	}
+	c.WriteReply(StatusCommandOK, "Okay.")
 }
 
 type commandPwd struct{}
@@ -379,13 +435,8 @@ func (commandEpsv) Execute(ctx context.Context, c *ServerConn, cmd *Command) {
 		c.WriteReply(StatusCanNotOpenDataConnection, "Data connection failed.")
 		return
 	}
-	_, port, err := net.SplitHostPort(dt.l.Addr().String())
-	if err != nil {
-		dt.Close()
-		c.WriteReply(StatusCanNotOpenDataConnection, "Data connection failed.")
-		return
-	}
-	c.WriteReply(StatusExtendedPassiveMode, fmt.Sprintf("Entering extended passive mode (|||%s|)", port))
+	addr := dt.l.Addr().(*net.TCPAddr)
+	c.WriteReply(StatusExtendedPassiveMode, fmt.Sprintf("Entering extended passive mode (|||%d|)", addr.Port))
 }
 
 // Extensions to FTP

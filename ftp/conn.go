@@ -166,3 +166,19 @@ func (c *ServerConn) close() error {
 	}
 	return nil
 }
+
+func (c *ServerConn) publicIPv4() net.IP {
+	for _, s := range c.server.PublicIPs {
+		ip := net.ParseIP(s)
+		if ip != nil {
+			ip = ip.To4()
+		}
+		if ip != nil {
+			return ip
+		}
+	}
+	if addr, ok := c.rwc.LocalAddr().(*net.TCPAddr); ok {
+		return addr.IP.To4()
+	}
+	return nil
+}

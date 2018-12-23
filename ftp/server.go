@@ -16,6 +16,8 @@ import (
 	"github.com/shogo82148/s3ftpgateway/vfs"
 )
 
+var defaultDialer net.Dialer
+
 // A Server defines patameters for running a FTP server.
 type Server struct {
 	// TCP address for the control connection to listen on, ":ftp" if empty.
@@ -45,6 +47,13 @@ type Server struct {
 	// MaxPassivePort is maximum port number for passive data connections.
 	// If MaxPassivePort is zero, a port number is automatically chosen.
 	MaxPassivePort int
+
+	// PublicIPs are public IPs.
+	PublicIPs []string
+
+	// Dialer is used for creating active data connections.
+	// If it is nil, the zero value is used.
+	Dialer *net.Dialer
 
 	listener net.Listener
 
@@ -170,6 +179,13 @@ func (s *Server) logger() Logger {
 		return StdLogger
 	}
 	return s.Logger
+}
+
+func (s *Server) dialer() *net.Dialer {
+	if s.Dialer == nil {
+		return &defaultDialer
+	}
+	return s.Dialer
 }
 
 var errPassiveModeIsDisabled = errors.New("ftp: passive mode is disable")
