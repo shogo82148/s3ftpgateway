@@ -5,11 +5,11 @@ import (
 	"crypto/rand"
 	"encoding/hex"
 	"fmt"
-	"io"
 	"io/ioutil"
 	"os"
 	"strings"
 	"testing"
+	"testing/iotest"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/aws/external"
@@ -276,14 +276,8 @@ func TestCreate(t *testing.T) {
 		fs, cleanup := newTestFileSystem(t)
 		defer cleanup()
 
-		w, err := fs.Create(ctx, "foobar.txt")
+		err := fs.Create(ctx, "foobar.txt", strings.NewReader("abc123"))
 		if err != nil {
-			t.Fatal(err)
-		}
-		if _, err := io.WriteString(w, "abc123"); err != nil {
-			t.Fatal(err)
-		}
-		if err := w.Close(); err != nil {
 			t.Fatal(err)
 		}
 
@@ -307,6 +301,21 @@ func TestCreate(t *testing.T) {
 		}
 	})
 
+	t.Run("timeout", func(t *testing.T) {
+		fs, cleanup := newTestFileSystem(t)
+		defer cleanup()
+
+		body := iotest.TimeoutReader(strings.NewReader("foobar"))
+		err := fs.Create(ctx, "foobar.txt", body)
+		if err == nil {
+			t.Errorf("want error, got %v", err)
+		}
+
+		if _, err := fs.Lstat(ctx, "foobar.txt"); err == nil || !os.IsNotExist(err) {
+			t.Errorf("want NotExist, got %v", err)
+		}
+	})
+
 	t.Run("exist", func(t *testing.T) {
 		fs, cleanup := newTestFileSystem(t)
 		defer cleanup()
@@ -322,7 +331,8 @@ func TestCreate(t *testing.T) {
 			return
 		}
 
-		if _, err := fs.Create(ctx, "foobar"); err == nil || !os.IsExist(err) {
+		body := strings.NewReader("abc123")
+		if err := fs.Create(ctx, "foobar", body); err == nil || !os.IsExist(err) {
 			t.Errorf("want ErrExist, got %s", err)
 		}
 	})
