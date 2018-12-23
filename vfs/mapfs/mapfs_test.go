@@ -2,11 +2,12 @@ package mapfs
 
 import (
 	"context"
-	"io"
 	"io/ioutil"
 	"os"
 	"reflect"
+	"strings"
 	"testing"
+	"testing/iotest"
 )
 
 func TestOpen(t *testing.T) {
@@ -160,32 +161,43 @@ func TestCreate(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
-	// Create new file
 	fs := New(map[string]string{})
-	w, err := fs.Create(ctx, "foobar.txt")
-	if err != nil {
-		t.Fatal("unexpected error: ", err)
-	}
-	n, err := io.WriteString(w, "hello")
-	if err != nil {
-		t.Fatal("unexpected error: ", err)
-	}
-	if n != len("hello") {
-		t.Errorf("got %d, want %d", n, len("hello"))
-	}
-	if err := w.Close(); err != nil {
-		t.Fatal(err)
-	}
 
-	// Check the content of th file.
-	r, err := fs.Open(ctx, "foobar.txt")
-	slurp, err := ioutil.ReadAll(r)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if string(slurp) != "hello" {
-		t.Errorf("got %s, want Hello World", string(slurp))
-	}
+	t.Run("success", func(t *testing.T) {
+		// Create new file
+		err := fs.Create(ctx, "foobar.txt", strings.NewReader("hello"))
+		if err != nil {
+			t.Fatal("unexpected error: ", err)
+		}
+
+		// Check the content of th file.
+		r, err := fs.Open(ctx, "foobar.txt")
+		slurp, err := ioutil.ReadAll(r)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if string(slurp) != "hello" {
+			t.Errorf("got %s, want Hello World", string(slurp))
+		}
+	})
+
+	t.Run("timeout", func(t *testing.T) {
+		body := iotest.TimeoutReader(strings.NewReader("foobar"))
+		err := fs.Create(ctx, "foobar.txt", body)
+		if err != iotest.ErrTimeout {
+			t.Errorf("want iotest.ErrTimeout, got %v", err)
+		}
+
+		// Check the content of th file.
+		r, err := fs.Open(ctx, "foobar.txt")
+		slurp, err := ioutil.ReadAll(r)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if string(slurp) != "hello" {
+			t.Errorf("got %s, want Hello World", string(slurp))
+		}
+	})
 }
 
 func TestMkdir(t *testing.T) {

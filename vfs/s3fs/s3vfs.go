@@ -4,7 +4,6 @@ import (
 	"context"
 	"errors"
 	"io"
-	"io/ioutil"
 	"net/http"
 	"os"
 	pathpkg "path"
@@ -16,6 +15,8 @@ import (
 	"github.com/aws/aws-sdk-go-v2/aws/awserr"
 	"github.com/aws/aws-sdk-go-v2/service/s3"
 	"github.com/aws/aws-sdk-go-v2/service/s3/s3iface"
+	"github.com/aws/aws-sdk-go-v2/service/s3/s3manager"
+	"github.com/aws/aws-sdk-go-v2/service/s3/s3manager/s3manageriface"
 )
 
 // FileSystem implements ctxvfs.FileSystem
@@ -24,8 +25,9 @@ type FileSystem struct {
 	Bucket string
 	Prefix string
 
-	mu    sync.Mutex
-	s3api s3iface.S3API
+	mu          sync.Mutex
+	s3api       s3iface.S3API
+	uploaderapi s3manageriface.UploaderAPI
 }
 
 // filekey converts the name to the key value on the S3 bucket.
@@ -55,6 +57,16 @@ func (fs *FileSystem) s3() s3iface.S3API {
 		fs.s3api = s3.New(fs.Config)
 	}
 	return fs.s3api
+}
+
+func (fs *FileSystem) uploader() s3manageriface.UploaderAPI {
+	fs.mu.Lock()
+	defer fs.mu.Unlock()
+
+	if fs.uploaderapi == nil {
+		fs.uploaderapi = s3manager.NewUploader(fs.Config)
+	}
+	return fs.uploaderapi
 }
 
 // Open opens the file.
@@ -265,64 +277,35 @@ func (fs *FileSystem) ReadDir(ctx context.Context, path string) ([]os.FileInfo, 
 	return res, nil
 }
 
-type fileWriter struct {
-	*os.File
-	ctx  context.Context
-	fs   *FileSystem
-	name string
-}
-
-func (f *fileWriter) Close() error {
-	defer os.Remove(f.File.Name())
-
-	if _, err := f.File.Seek(0, io.SeekStart); err != nil {
-		f.File.Close()
-		return err
-	}
-	svc := f.fs.s3()
-	req := svc.PutObjectRequest(&s3.PutObjectInput{
-		Bucket: aws.String(f.fs.Bucket),
-		Key:    aws.String(f.fs.filekey(f.name)),
-		Body:   f.File,
-	})
-	req.SetContext(f.ctx)
-	if _, err := req.Send(); err != nil {
-		f.File.Close()
-		return &os.PathError{
-			Op:   "create",
-			Path: filename(f.name),
-			Err:  err,
-		}
-	}
-	return f.File.Close()
-}
-
 // Create creates the named file, truncating it if it already exists.
-func (fs *FileSystem) Create(ctx context.Context, name string) (io.WriteCloser, error) {
+func (fs *FileSystem) Create(ctx context.Context, name string, body io.Reader) error {
 	stat, err := fs.Lstat(ctx, name)
 	if err != nil {
 		if !os.IsNotExist(err) {
-			return nil, err
+			return err
 		}
 	} else if stat.IsDir() {
-		return nil, &os.PathError{
+		return &os.PathError{
 			Op:   "create",
 			Path: filename(name),
 			Err:  os.ErrExist,
 		}
 	}
 
-	tmp, err := ioutil.TempFile("", "s3fs_")
+	svc := fs.uploader()
+	_, err = svc.UploadWithContext(ctx, &s3manager.UploadInput{
+		Bucket: aws.String(fs.Bucket),
+		Key:    aws.String(fs.filekey(name)),
+		Body:   body,
+	})
 	if err != nil {
-		return nil, err
+		return &os.PathError{
+			Op:   "create",
+			Path: filename(name),
+			Err:  err,
+		}
 	}
-	f := &fileWriter{
-		File: tmp,
-		ctx:  ctx,
-		fs:   fs,
-		name: name,
-	}
-	return f, nil
+	return nil
 }
 
 // Mkdir creates a new directory. If name is already a directory, Mkdir

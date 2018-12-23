@@ -25,7 +25,7 @@ type FileSystem interface {
 	ReadDir(ctx context.Context, path string) ([]os.FileInfo, error)
 
 	// Create creates the named file, truncating it if it already exists.
-	Create(ctx context.Context, name string) (io.WriteCloser, error)
+	Create(ctx context.Context, name string, body io.Reader) error
 
 	// Mkdir creates a new directory. If name is already a directory, Mkdir
 	// returns an error (that can be detected using os.IsExist).
