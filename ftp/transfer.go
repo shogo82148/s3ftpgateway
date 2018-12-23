@@ -36,6 +36,38 @@ func (defaultDataTransfer) Close() error {
 	return nil
 }
 
+type activeDataTransfer struct {
+	conn net.Conn
+}
+
+func (c *ServerConn) newActiveDataTransfer(ctx context.Context, addr string) (*activeDataTransfer, error) {
+	dialer := c.server.dialer()
+	conn, err := dialer.DialContext(ctx, "tcp", addr)
+	if err != nil {
+		return nil, err
+	}
+	t := &activeDataTransfer{
+		conn: conn,
+	}
+
+	// replace old data transfer.
+	c.dt.Close()
+	c.dt = t
+	return t, nil
+}
+
+func (t *activeDataTransfer) Conn(ctx context.Context) (net.Conn, error) {
+	return t.conn, nil
+}
+
+func (t *activeDataTransfer) Abort() error {
+	return t.conn.Close()
+}
+
+func (t *activeDataTransfer) Close() error {
+	return t.conn.Close()
+}
+
 type chConn struct {
 	conn net.Conn
 	err  error
