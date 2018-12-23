@@ -423,18 +423,23 @@ func (commandEprt) Execute(ctx context.Context, c *ServerConn, cmd *Command) {
 	addr := params[2]
 	port := params[3]
 
-	var addrLen int
+	var ip net.IP
 	switch proto {
 	case "1": // IP v4
-		addrLen = net.IPv4len
+		ip = net.ParseIP(addr)
+		if ip != nil {
+			ip = ip.To4()
+		}
 	case "2": // IP v6
-		addrLen = net.IPv6len
+		ip = net.ParseIP(addr)
+		if ip != nil {
+			ip = ip.To16()
+		}
 	default:
 		c.WriteReply(StatusNetworkProtoNotSupported, "Network protocol not supported, use (1,2)")
 		return
 	}
-	ip := net.ParseIP(addr)
-	if len(ip) != addrLen {
+	if ip == nil {
 		c.WriteReply(StatusBadArguments, "Invalid address.")
 		return
 	}
