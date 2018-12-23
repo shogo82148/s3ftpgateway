@@ -7,7 +7,6 @@ import (
 	"net"
 	"strconv"
 	"strings"
-	"time"
 )
 
 // Command is a ftp command.
@@ -149,10 +148,14 @@ func (commandPass) Execute(ctx context.Context, c *ServerConn, cmd *Command) {
 type commandPasv struct{}
 
 func (commandPasv) IsExtend() bool     { return false }
-func (commandPasv) RequireParam() bool { return true }
+func (commandPasv) RequireParam() bool { return false }
 func (commandPasv) RequireAuth() bool  { return true }
 
 func (commandPasv) Execute(ctx context.Context, c *ServerConn, cmd *Command) {
+	if c.epsvAll {
+		c.WriteReply(StatusBadArguments, "PASV command is disabled.")
+		return
+	}
 	ipv4 := c.publicIPv4()
 	if ipv4 == nil {
 		c.WriteReply(StatusNotImplemented, "PASV command is disabled.")
@@ -178,6 +181,11 @@ func (commandPort) RequireParam() bool { return true }
 func (commandPort) RequireAuth() bool  { return true }
 
 func (commandPort) Execute(ctx context.Context, c *ServerConn, cmd *Command) {
+	if c.epsvAll {
+		c.WriteReply(StatusBadArguments, "PORT command is disabled.")
+		return
+	}
+
 	args := strings.Split(cmd.Arg, ",")
 	if len(args) != 6 {
 		c.WriteReply(StatusBadArguments, "Syntax error.")
@@ -234,26 +242,29 @@ func (commandRetr) IsExtend() bool     { return false }
 func (commandRetr) RequireParam() bool { return true }
 func (commandRetr) RequireAuth() bool  { return true }
 
-func (retr commandRetr) Execute(ctx context.Context, c *ServerConn, cmd *Command) {
-	f, err := retr.open(ctx, c, cmd.Arg)
+func (commandRetr) Execute(ctx context.Context, c *ServerConn, cmd *Command) {
+	f, err := c.fileSystem().Open(ctx, cmd.Arg)
 	if err != nil {
+		c.server.logger().Printf(c.sessionID, "fail to retrieve file: %v", err)
 		c.WriteReply(StatusBadFileName, "Requested action not taken.")
 		return
 	}
 	c.WriteReply(StatusAboutToSend, "File status okay; about to open data connection.")
 
-	dt := c.dt
+	conn, err := c.dt.Conn(ctx)
+	if err != nil {
+		c.server.logger().Printf(c.sessionID, "fail to start data connection: %v", err)
+		c.WriteReply(StatusTransfertAborted, "Requested file action aborted.")
+		return
+	}
+
 	go func() {
 		defer f.Close()
-		conn, err := retr.conn(ctx, dt)
-		if err != nil {
-			c.WriteReply(StatusTransfertAborted, "Requested file action aborted.")
-			return
-		}
 		defer conn.Close()
 
 		n, err := io.Copy(conn, f)
 		if err != nil {
+			c.server.logger().Printf(c.sessionID, "fail to retrieve file: %v", err)
 			c.WriteReply(StatusActionAborted, "Requested file action aborted.")
 			return
 		}
@@ -262,52 +273,35 @@ func (retr commandRetr) Execute(ctx context.Context, c *ServerConn, cmd *Command
 	}()
 }
 
-func (commandRetr) open(ctx context.Context, c *ServerConn, name string) (io.ReadCloser, error) {
-	ctx, cancel := context.WithTimeout(ctx, time.Minute)
-	defer cancel()
-	return c.fileSystem().Open(ctx, name)
-}
-
-func (commandRetr) conn(ctx context.Context, dt dataTransfer) (net.Conn, error) {
-	ctx, cancel := context.WithTimeout(ctx, time.Minute)
-	defer cancel()
-	return dt.Conn(ctx)
-}
-
 // commandStor
 type commandStor struct{}
 
 func (commandStor) IsExtend() bool     { return false }
-func (commandStor) RequireParam() bool { return false }
+func (commandStor) RequireParam() bool { return true }
 func (commandStor) RequireAuth() bool  { return true }
 
-func (stor commandStor) Execute(ctx context.Context, c *ServerConn, cmd *Command) {
+func (commandStor) Execute(ctx context.Context, c *ServerConn, cmd *Command) {
 	c.WriteReply(StatusAboutToSend, "Data transfer starting")
 
-	dt := c.dt
 	name := cmd.Arg
-	go func() {
-		conn, err := stor.conn(ctx, dt)
-		if err != nil {
-			c.WriteReply(StatusTransfertAborted, "Requested file action aborted.")
-			return
-		}
-		defer conn.Close()
+	conn, err := c.dt.Conn(ctx)
+	if err != nil {
+		c.server.logger().Printf(c.sessionID, "fail to start data connection: %v", err)
+		c.WriteReply(StatusTransfertAborted, "Requested file action aborted.")
+		return
+	}
 
+	go func() {
+		defer conn.Close()
 		r := &countReader{Reader: conn}
-		err = c.fileSystem().Create(ctx, name, conn)
+		err = c.fileSystem().Create(context.Background(), name, conn)
 		if err != nil {
+			c.server.logger().Printf(c.sessionID, "fail to store file: %v", err)
 			c.WriteReply(StatusActionAborted, "Requested file action aborted.")
 			return
 		}
 		c.WriteReply(StatusClosingDataConnection, fmt.Sprintf("OK, received %d bytes.", r.count))
 	}()
-}
-
-func (commandStor) conn(ctx context.Context, dt dataTransfer) (net.Conn, error) {
-	ctx, cancel := context.WithTimeout(ctx, time.Minute)
-	defer cancel()
-	return dt.Conn(ctx)
 }
 
 type countReader struct {
@@ -411,9 +405,14 @@ type commandEprt struct{}
 
 func (commandEprt) IsExtend() bool     { return true }
 func (commandEprt) RequireParam() bool { return true }
-func (commandEprt) RequireAuth() bool  { return false }
+func (commandEprt) RequireAuth() bool  { return true }
 
 func (commandEprt) Execute(ctx context.Context, c *ServerConn, cmd *Command) {
+	if c.epsvAll {
+		c.WriteReply(StatusBadArguments, "EPRT command is disabled.")
+		return
+	}
+
 	c.WriteReply(StatusNotImplemented, "Command not implemented.")
 }
 
@@ -425,6 +424,19 @@ func (commandEpsv) RequireParam() bool { return false }
 func (commandEpsv) RequireAuth() bool  { return true }
 
 func (commandEpsv) Execute(ctx context.Context, c *ServerConn, cmd *Command) {
+	if strings.EqualFold(cmd.Arg, "all") {
+		c.epsvAll = true
+		c.WriteReply(StatusReady, "all data connection setup commands other than EPSV is disabled.")
+		return
+	}
+	switch cmd.Arg {
+	case "":
+	case "1": // IPv4 Address
+	case "2": // IPv6 Address
+	default:
+		c.WriteReply(StatusBadArguments, "Invalid arguments.")
+		return
+	}
 	dt, err := c.newPassiveDataTransfer()
 	if err != nil {
 		if err == errPassiveModeIsDisabled {

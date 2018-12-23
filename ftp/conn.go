@@ -8,6 +8,7 @@ import (
 	"log"
 	"net"
 	"sync"
+	"time"
 
 	"github.com/shogo82148/s3ftpgateway/vfs"
 )
@@ -43,6 +44,11 @@ type ServerConn struct {
 
 	// a connector for data connection
 	dt dataTransfer
+
+	// use EPSV command for starting data connection.
+	// if it is true, reject all data connection
+	// setup commands other than EPSV (i.e., EPRT, PORT, PASV, et al.)
+	epsvAll bool
 }
 
 func (c *ServerConn) serve(ctx context.Context) {
@@ -60,22 +66,37 @@ func (c *ServerConn) serve(ctx context.Context) {
 			c.WriteReply(StatusBadCommand, "Syntax error.")
 			continue
 		}
-
-		if cmd.Name != "PASS" {
-			c.server.logger().PrintCommand(c.sessionID, cmd.Name, cmd.Arg)
-		} else {
-			c.server.logger().PrintCommand(c.sessionID, cmd.Name, "****")
-		}
-
-		if command, ok := commands[cmd.Name]; ok && command != nil {
-			command.Execute(ctx, c, cmd)
-		} else {
-			c.WriteReply(StatusBadCommand, "Command not found.")
-		}
+		c.execCommand(ctx, cmd)
 	}
 	if err := c.scanner.Err(); err != nil {
 		log.Println(err)
 	}
+}
+
+func (c *ServerConn) execCommand(ctx context.Context, cmd *Command) {
+	ctx, cancel := context.WithTimeout(ctx, time.Minute)
+	defer cancel()
+
+	if cmd.Name != "PASS" {
+		c.server.logger().PrintCommand(c.sessionID, cmd.Name, cmd.Arg)
+	} else {
+		c.server.logger().PrintCommand(c.sessionID, cmd.Name, "****")
+	}
+
+	command, ok := commands[cmd.Name]
+	if !ok || command == nil {
+		c.WriteReply(StatusBadCommand, "Command not found.")
+		return
+	}
+	if command.RequireParam() && cmd.Arg == "" {
+		c.WriteReply(StatusBadArguments, "Action aborted, required param missing.")
+		return
+	}
+	if command.RequireAuth() && c.auth == nil {
+		c.WriteReply(StatusNotLoggedIn, "Not logged in")
+		return
+	}
+	command.Execute(ctx, c, cmd)
 }
 
 // WriteReply writes a ftp reply.
