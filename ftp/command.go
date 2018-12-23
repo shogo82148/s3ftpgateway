@@ -242,15 +242,15 @@ func (commandRetr) Execute(ctx context.Context, c *ServerConn, cmd *Command) {
 	}
 	c.WriteReply(StatusAboutToSend, "File status okay; about to open data connection.")
 
-	dt := c.dt
+	conn, err := c.dt.Conn(ctx)
+	if err != nil {
+		c.server.logger().Printf(c.sessionID, "fail to start data connection: %v", err)
+		c.WriteReply(StatusTransfertAborted, "Requested file action aborted.")
+		return
+	}
+
 	go func() {
 		defer f.Close()
-		conn, err := dt.Conn(ctx)
-		if err != nil {
-			c.server.logger().Printf(c.sessionID, "fail to start data connection: %v", err)
-			c.WriteReply(StatusTransfertAborted, "Requested file action aborted.")
-			return
-		}
 		defer conn.Close()
 
 		n, err := io.Copy(conn, f)
@@ -274,19 +274,18 @@ func (commandStor) RequireAuth() bool  { return true }
 func (commandStor) Execute(ctx context.Context, c *ServerConn, cmd *Command) {
 	c.WriteReply(StatusAboutToSend, "Data transfer starting")
 
-	dt := c.dt
 	name := cmd.Arg
-	go func() {
-		conn, err := dt.Conn(ctx)
-		if err != nil {
-			c.server.logger().Printf(c.sessionID, "fail to start data connection: %v", err)
-			c.WriteReply(StatusTransfertAborted, "Requested file action aborted.")
-			return
-		}
-		defer conn.Close()
+	conn, err := c.dt.Conn(ctx)
+	if err != nil {
+		c.server.logger().Printf(c.sessionID, "fail to start data connection: %v", err)
+		c.WriteReply(StatusTransfertAborted, "Requested file action aborted.")
+		return
+	}
 
+	go func() {
+		defer conn.Close()
 		r := &countReader{Reader: conn}
-		err = c.fileSystem().Create(ctx, name, conn)
+		err = c.fileSystem().Create(context.Background(), name, conn)
 		if err != nil {
 			c.server.logger().Printf(c.sessionID, "fail to store file: %v", err)
 			c.WriteReply(StatusActionAborted, "Requested file action aborted.")
