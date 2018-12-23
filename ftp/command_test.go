@@ -138,6 +138,7 @@ my $result = "";
 open my $fh, ">", \$result;
 ok $ftp->get('testfile', $fh), 'get';
 is $result, "Hello ftp!";
+ok $ftp->quit(), 'quit';
 done_testing;
 `
 
