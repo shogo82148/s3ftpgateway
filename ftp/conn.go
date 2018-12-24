@@ -5,6 +5,7 @@ import (
 	"context"
 	"crypto/tls"
 	"fmt"
+	"io"
 	"log"
 	"net"
 	pkgpath "path"
@@ -45,6 +46,10 @@ type ServerConn struct {
 
 	// data channel protection level
 	prot protectionLevel
+
+	// for RNFR command.
+	rmfr       string
+	rmfrReader io.ReadCloser
 
 	// a connector for data connection
 	dt dataTransfer
@@ -181,13 +186,18 @@ func (c *ServerConn) fileSystem() vfs.FileSystem {
 }
 
 func (c *ServerConn) close() error {
-	if ServerConn := c.dt; ServerConn != nil {
-		ServerConn.Close()
+	if dt := c.dt; dt != nil {
+		dt.Close()
 		c.dt = nil
 	}
-	if ServerConn := c.rwc; ServerConn != nil {
-		ServerConn.Close()
+	if rwc := c.rwc; rwc != nil {
+		rwc.Close()
 		c.rwc = nil
+	}
+	if r := c.rmfrReader; r != nil {
+		r.Close()
+		c.rmfr = ""
+		c.rmfrReader = nil
 	}
 	return nil
 }

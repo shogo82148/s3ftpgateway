@@ -476,6 +476,49 @@ done_testing;
 	perl.Prove(ctx, t, script, u.Host)
 }
 
+func TestRename(t *testing.T) {
+	perl, err := newPerlExecutor()
+	if err != nil {
+		t.Skipf("perl is required for this test: %v", err)
+		return
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+
+	ts := ftptest.NewServer(mapfs.New(map[string]string{
+		"foo.txt": "hello",
+	}))
+	defer ts.Close()
+	ts.Config.Logger = testLogger{t}
+
+	u, err := url.Parse(ts.URL)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	script := `use utf8;
+use strict;
+use warnings;
+use Test::More;
+use Net::FTP;
+
+my $host = shift;
+my $ftp = Net::FTP->new($host, Debug => 1) or die "fail to connect ftp server: $@";
+ok $ftp->login('anonymous', 'foobar@example.com'), 'login';
+
+ok $ftp->rename('foo.txt', 'bar.txt'), 'rename';
+ok !$ftp->rename('foo.txt', 'bar.txt'), 'rename';
+ok $ftp->rename('bar.txt', 'foo.txt'), 'rename';
+
+ok $ftp->quit;
+
+done_testing;
+`
+
+	perl.Prove(ctx, t, script, u.Host)
+}
+
 func TestStor(t *testing.T) {
 	perl, err := newPerlExecutor()
 	if err != nil {
