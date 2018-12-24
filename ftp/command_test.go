@@ -568,6 +568,54 @@ done_testing;
 	}
 }
 
+func TestStou(t *testing.T) {
+	perl, err := newPerlExecutor()
+	if err != nil {
+		t.Skipf("perl is required for this test: %v", err)
+		return
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+
+	fs := mapfs.New(map[string]string{})
+	ts := ftptest.NewServer(fs)
+	defer ts.Close()
+	ts.Config.Logger = testLogger{t}
+
+	u, err := url.Parse(ts.URL)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	script := `use utf8;
+use strict;
+use warnings;
+use Test::More;
+use Net::FTP;
+
+my $host = shift;
+my $ftp = Net::FTP->new($host, Debug => 1) or die "fail to connect ftp server: $@";
+ok $ftp->login('anonymous', 'foobar@example.com'), 'login';
+
+my $content = "Hello ftp!";
+open my $fh, "<", \$content;
+ok my $name1 = $ftp->put_unique($fh), 'put_unique';
+close $fh;
+
+open my $fh, "<", \$content;
+ok my $name2 = $ftp->put_unique($fh), 'put_unique';
+close $fh;
+
+isnt $name1, $name2;
+
+ok $ftp->quit(), 'quit';
+done_testing;
+`
+
+	perl.Prove(ctx, t, script, u.Host)
+}
+
 func TestEprt(t *testing.T) {
 	perl, err := newPerlExecutor()
 	if err != nil {

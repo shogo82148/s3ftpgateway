@@ -3,6 +3,8 @@ package ftp
 import (
 	"bufio"
 	"context"
+	"crypto/rand"
+	"encoding/hex"
 	"fmt"
 	"io"
 	"net"
@@ -79,7 +81,7 @@ var commands = map[string]command{
 	"SMNT": nil,
 	"STAT": nil,
 	"STOR": commandStor{},
-	"STOU": nil,
+	"STOU": commandStou{},
 	"STRU": nil,
 	"SYST": nil,
 	"TYPE": commandType{},
@@ -599,6 +601,48 @@ func (r *countReader) Read(b []byte) (int, error) {
 	n, err := r.Reader.Read(b)
 	r.count += int64(n)
 	return n, err
+}
+
+// STORE UNIQUE (STOU)
+// This command behaves like STOR except that the resultant
+// file is to be created in the current directory under a name
+// unique to that directory.
+type commandStou struct{}
+
+func (commandStou) IsExtend() bool     { return false }
+func (commandStou) RequireParam() bool { return false }
+func (commandStou) RequireAuth() bool  { return true }
+
+func (commandStou) Execute(ctx context.Context, c *ServerConn, cmd *Command) {
+	// generate unique file name.
+	var name string
+	var buf [16]byte
+	if _, err := io.ReadFull(rand.Reader, buf[:]); err != nil {
+		c.WriteReply(StatusBadCommand, "Internal error.")
+		return
+	}
+	name = c.buildPath(hex.EncodeToString(buf[:]))
+
+	c.WriteReply(StatusAboutToSend, fmt.Sprintf("Data transfer starting: %s", name))
+
+	conn, err := c.dt.Conn(ctx)
+	if err != nil {
+		c.server.logger().Printf(c.sessionID, "fail to start data connection: %v", err)
+		c.WriteReply(StatusTransfertAborted, "Requested file action aborted.")
+		return
+	}
+
+	go func() {
+		defer conn.Close()
+		r := &countReader{Reader: conn}
+		err = c.fileSystem().Create(context.Background(), name, r)
+		if err != nil {
+			c.server.logger().Printf(c.sessionID, "fail to store file: %v", err)
+			c.WriteReply(StatusActionAborted, "Requested file action aborted.")
+			return
+		}
+		c.WriteReply(StatusClosingDataConnection, fmt.Sprintf("OK, received %d bytes. unique file name: %s", r.count, name))
+	}()
 }
 
 // commandType
