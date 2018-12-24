@@ -21,6 +21,10 @@
 - [RFC 1123](https://tools.ietf.org/html/rfc1123) Requirements for Internet Hosts -- Application and Support
 - [RFC 959](https://tools.ietf.org/html/rfc959) FILE TRANSFER PROTOCOL (FTP)
 
+For an english summary that's somewhat more legible than the RFCs, and provides some commentary on what features are actually useful or relevant 24 years after RFC959 was published:
+
+- http://cr.yp.to/ftp.html
+
 ## TELNET
 
 FTP is based on TELNET.
