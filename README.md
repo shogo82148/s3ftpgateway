@@ -1,5 +1,7 @@
 # s3ftpgateway
 
+[![Build Status](https://travis-ci.com/shogo82148/s3ftpgateway.svg?branch=master)](https://travis-ci.com/shogo82148/s3ftpgateway)
+
 # Related Works
 
 - [goftp/server](https://github.com/goftp/server)
@@ -20,6 +22,10 @@
 - [RFC 1127](https://tools.ietf.org/html/rfc1127) A Perspective on the Host Requirements RFCs
 - [RFC 1123](https://tools.ietf.org/html/rfc1123) Requirements for Internet Hosts -- Application and Support
 - [RFC 959](https://tools.ietf.org/html/rfc959) FILE TRANSFER PROTOCOL (FTP)
+
+For an english summary that's somewhat more legible than the RFCs, and provides some commentary on what features are actually useful or relevant 24 years after RFC959 was published:
+
+- http://cr.yp.to/ftp.html
 
 ## TELNET
 
