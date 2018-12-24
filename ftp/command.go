@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"io"
 	"net"
+	"os"
 	pkgpath "path"
 	"strconv"
 	"strings"
@@ -59,7 +60,7 @@ var commands = map[string]command{
 	"DELE": nil,
 	"HELP": nil,
 	"LIST": nil,
-	"MKD":  nil,
+	"MKD":  commandMkd{},
 	"NLST": nil,
 	"NOOP": nil,
 	"MODE": nil,
@@ -154,7 +155,7 @@ func (commandCwd) RequireParam() bool { return true }
 func (commandCwd) RequireAuth() bool  { return true }
 
 func (commandCwd) Execute(ctx context.Context, c *ServerConn, cmd *Command) {
-	path := pkgpath.Clean("/" + cmd.Arg)
+	path := c.buildPath(cmd.Arg)
 	stat, err := c.fileSystem().Stat(ctx, path)
 	if err != nil || !stat.IsDir() {
 		c.WriteReply(StatusNeedSomeUnavailableResource, "No such directory.")
@@ -162,6 +163,28 @@ func (commandCwd) Execute(ctx context.Context, c *ServerConn, cmd *Command) {
 	}
 	c.pwd = path
 	c.WriteReply(StatusCommandOK, fmt.Sprintf("Directory changed to %s.", path))
+}
+
+type commandMkd struct{}
+
+func (commandMkd) IsExtend() bool     { return false }
+func (commandMkd) RequireParam() bool { return true }
+func (commandMkd) RequireAuth() bool  { return true }
+
+func (commandMkd) Execute(ctx context.Context, c *ServerConn, cmd *Command) {
+	path := c.buildPath(cmd.Arg)
+	if err := c.fileSystem().Mkdir(ctx, path); err != nil {
+		if os.IsExist(err) {
+			c.WriteReply(
+				StatusDirectoryAlreadyExists,
+				fmt.Sprintf(`"%s" directory already exists; taking no action.`, escapeQuote.Replace(path)),
+			)
+			return
+		}
+		c.WriteReply(StatusBadCommand, "Internal error.")
+		return
+	}
+	c.WriteReply(StatusPathCreated, fmt.Sprintf(`"%s" directory created.`, escapeQuote.Replace(path)))
 }
 
 type commandPass struct{}

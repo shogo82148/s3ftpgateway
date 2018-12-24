@@ -44,6 +44,7 @@ const (
 	StatusNotImplemented          = 502 // Command not implemented.
 	StatusBadSequence             = 503 // Bad sequence of commands.
 	StatusNotImplementedParameter = 504 // Command not implemented for that parameter.
+	StatusDirectoryAlreadyExists  = 521 // Directory already exists.
 	StatusNotLoggedIn             = 530 // Not logged in.
 	StatusStorNeedAccount         = 532 // Need account for storing files.
 	StatusFileUnavailable         = 550 // Requested action not taken. File unavailable (e.g., file not found, no access).

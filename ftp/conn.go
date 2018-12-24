@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"log"
 	"net"
+	pkgpath "path"
 	"sync"
 	"time"
 
@@ -205,4 +206,11 @@ func (c *ServerConn) publicIPv4() net.IP {
 		return addr.IP.To4()
 	}
 	return nil
+}
+
+func (c *ServerConn) buildPath(path string) string {
+	if pkgpath.IsAbs(path) {
+		return pkgpath.Clean(path)
+	}
+	return pkgpath.Clean(pkgpath.Join(c.pwd, path))
 }
