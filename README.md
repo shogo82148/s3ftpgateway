@@ -1,5 +1,7 @@
 # s3ftpgateway
 
+[![Build Status](https://travis-ci.com/shogo82148/s3ftpgateway.svg?branch=master)](https://travis-ci.com/shogo82148/s3ftpgateway)
+
 # Related Works
 
 - [goftp/server](https://github.com/goftp/server)
