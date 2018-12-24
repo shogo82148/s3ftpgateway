@@ -54,7 +54,7 @@ var commands = map[string]command{
 	"ACCT": nil,
 	"ALLO": nil,
 	"APPE": nil,
-	"CDUP": nil,
+	"CDUP": commandCdup{},
 	"CWD":  commandCwd{},
 	"DELE": nil,
 	"HELP": nil,
@@ -130,6 +130,21 @@ func (commandAbor) RequireAuth() bool  { return false }
 
 func (commandAbor) Execute(ctx context.Context, c *ServerConn, cmd *Command) {
 	c.dt.Abort()
+}
+
+type commandCdup struct{}
+
+func (commandCdup) IsExtend() bool     { return false }
+func (commandCdup) RequireParam() bool { return false }
+func (commandCdup) RequireAuth() bool  { return true }
+
+func (commandCdup) Execute(ctx context.Context, c *ServerConn, cmd *Command) {
+	if c.pwd == "" || c.pwd == "/" {
+		c.WriteReply(StatusNeedSomeUnavailableResource, "No such directory.")
+		return
+	}
+	c.pwd = pkgpath.Dir(c.pwd)
+	c.WriteReply(StatusCommandOK, fmt.Sprintf("Directory changed to %s.", c.pwd))
 }
 
 type commandCwd struct{}
