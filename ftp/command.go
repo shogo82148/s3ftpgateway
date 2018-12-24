@@ -71,7 +71,7 @@ var commands = map[string]command{
 	"QUIT": commandQuit{},
 	"REIN": nil,
 	"RETR": commandRetr{},
-	"RMD":  nil,
+	"RMD":  commandRmd{},
 	"RNFR": nil,
 	"RNTO": nil,
 	"SITE": nil,
@@ -340,6 +340,26 @@ func (commandRetr) Execute(ctx context.Context, c *ServerConn, cmd *Command) {
 
 		c.WriteReply(StatusClosingDataConnection, fmt.Sprintf("Data transfer starting %d bytes", n))
 	}()
+}
+
+// RMD: Remove the directory with the name "pathname".
+type commandRmd struct{}
+
+func (commandRmd) IsExtend() bool     { return false }
+func (commandRmd) RequireParam() bool { return true }
+func (commandRmd) RequireAuth() bool  { return true }
+
+func (commandRmd) Execute(ctx context.Context, c *ServerConn, cmd *Command) {
+	path := c.buildPath(cmd.Arg)
+	if err := c.fileSystem().Remove(ctx, path); err != nil {
+		if os.IsNotExist(err) {
+			c.WriteReply(StatusNeedSomeUnavailableResource, "No such directory.")
+			return
+		}
+		c.WriteReply(StatusBadCommand, "Internal error.")
+		return
+	}
+	c.WriteReply(StatusCommandOK, "Removed directory "+path)
 }
 
 // commandStor
