@@ -1,6 +1,7 @@
 package ftp
 
 import (
+	"bufio"
 	"context"
 	"fmt"
 	"io"
@@ -59,7 +60,7 @@ var commands = map[string]command{
 	"CWD":  commandCwd{},
 	"DELE": nil,
 	"HELP": nil,
-	"LIST": nil,
+	"LIST": commandList{},
 	"MKD":  commandMkd{},
 	"NLST": nil,
 	"NOOP": nil,
@@ -163,6 +164,62 @@ func (commandCwd) Execute(ctx context.Context, c *ServerConn, cmd *Command) {
 	}
 	c.pwd = path
 	c.WriteReply(StatusCommandOK, fmt.Sprintf("Directory changed to %s.", path))
+}
+
+// LIST (LIST)
+type commandList struct{}
+
+func (commandList) IsExtend() bool     { return false }
+func (commandList) RequireParam() bool { return false }
+func (commandList) RequireAuth() bool  { return true }
+
+func (commandList) Execute(ctx context.Context, c *ServerConn, cmd *Command) {
+	path := c.pwd
+	if cmd.Arg != "" {
+		path = c.buildPath(cmd.Arg)
+	}
+	info, err := c.fileSystem().ReadDir(ctx, path)
+	if err != nil {
+		if os.IsNotExist(err) {
+			c.WriteReply(StatusNeedSomeUnavailableResource, "No such directory.")
+			return
+		}
+		c.WriteReply(StatusBadCommand, "Internal error.")
+		return
+	}
+	c.WriteReply(StatusAboutToSend, "File status okay; about to open data connection.")
+
+	conn, err := c.dt.Conn(ctx)
+	if err != nil {
+		c.server.logger().Printf(c.sessionID, "fail to start data connection: %v", err)
+		c.WriteReply(StatusTransfertAborted, "Requested file action aborted.")
+		return
+	}
+	user := c.auth.User
+
+	go func() {
+		defer conn.Close()
+		w := bufio.NewWriter(conn)
+		bytes := int64(0)
+		for _, fi := range info {
+			n, _ := fmt.Fprintf(
+				w,
+				"%s 1 %s %s %13d %s %s\r\n",
+				fi.Mode(),
+				user, user,
+				fi.Size(),
+				fi.ModTime().Format(" Jan _2 15:04"),
+				fi.Name(),
+			)
+			bytes += int64(n)
+		}
+		if err := w.Flush(); err != nil {
+			c.server.logger().Printf(c.sessionID, "fail to list directory: %v", err)
+			c.WriteReply(StatusActionAborted, "Requested file action aborted.")
+			return
+		}
+		c.WriteReply(StatusClosingDataConnection, fmt.Sprintf("Data transfer starting %d bytes", bytes))
+	}()
 }
 
 type commandMkd struct{}
