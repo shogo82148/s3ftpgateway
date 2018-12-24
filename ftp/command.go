@@ -73,8 +73,8 @@ var commands = map[string]command{
 	"REIN": nil,
 	"RETR": commandRetr{},
 	"RMD":  commandRmd{},
-	"RNFR": nil,
-	"RNTO": nil,
+	"RNFR": commandRnfr{},
+	"RNTO": commandRnto{},
 	"SITE": nil,
 	"SMNT": nil,
 	"STAT": nil,
@@ -467,6 +467,74 @@ func (commandRmd) Execute(ctx context.Context, c *ServerConn, cmd *Command) {
 		return
 	}
 	c.WriteReply(StatusCommandOK, "Removed directory "+path)
+}
+
+// RRENAME FROM (RNFR)
+// This command specifies the old pathname of the file which is
+// to be renamed.
+type commandRnfr struct{}
+
+func (commandRnfr) IsExtend() bool     { return false }
+func (commandRnfr) RequireParam() bool { return true }
+func (commandRnfr) RequireAuth() bool  { return true }
+
+func (commandRnfr) Execute(ctx context.Context, c *ServerConn, cmd *Command) {
+	if c.rmfr != "" || c.rmfrReader != nil {
+		c.WriteReply(StatusBadSequence, "RNTO must be call after RNFR.")
+		return
+	}
+
+	path := c.buildPath(cmd.Arg)
+	r, err := c.fileSystem().Open(ctx, path)
+	if err != nil {
+		if os.IsNotExist(err) {
+			c.WriteReply(StatusNeedSomeUnavailableResource, "No such directory.")
+			return
+		}
+		c.server.logger().Printf(c.sessionID, "fail to open file: %v", err)
+		c.WriteReply(StatusBadCommand, "Internal error.")
+		return
+	}
+	c.rmfr = path
+	c.rmfrReader = r
+	c.WriteReply(StatusRequestFilePending, "Requested file action pending further information.")
+}
+
+// RRENAME TO (RNTO)
+// This command specifies the new pathname of the file
+// specified in the immediately preceding "rename from"
+// command.
+type commandRnto struct{}
+
+func (commandRnto) IsExtend() bool     { return false }
+func (commandRnto) RequireParam() bool { return true }
+func (commandRnto) RequireAuth() bool  { return true }
+
+func (commandRnto) Execute(ctx context.Context, c *ServerConn, cmd *Command) {
+	fs := c.fileSystem()
+	if c.rmfr == "" || c.rmfrReader == nil {
+		c.WriteReply(StatusBadSequence, "RNTO must be call after RNFR.")
+		return
+	}
+	from := c.rmfr
+	to := c.buildPath(cmd.Arg)
+	r := c.rmfrReader
+	c.rmfr = ""
+	c.rmfrReader = nil
+
+	go func() {
+		defer r.Close()
+		ctx, cancel := context.WithCancel(context.Background())
+		defer cancel()
+		err := fs.Create(ctx, to, r)
+		if err != nil {
+			c.server.logger().Printf(c.sessionID, "fail to create file: %v", err)
+			c.WriteReply(StatusBadCommand, "Internal error.")
+			return
+		}
+		fs.Remove(ctx, from)
+		c.WriteReply(StatusRequestedFileActionOK, "Requested file action okay, completed.")
+	}()
 }
 
 // commandStor
