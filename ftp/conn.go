@@ -36,6 +36,9 @@ type ServerConn struct {
 	user string
 	auth *Authorization
 
+	// pwd is current working directory.
+	pwd string
+
 	// TLS connection is enabled.
 	tls bool
 
