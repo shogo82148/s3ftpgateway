@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"io"
 	"net"
+	"os"
+	pkgpath "path"
 	"strconv"
 	"strings"
 )
@@ -35,6 +37,10 @@ func ParseCommand(s string) (*Command, error) {
 	return &c, nil
 }
 
+var escapeQuote = strings.NewReplacer(
+	`"`, `""`,
+)
+
 type command interface {
 	IsExtend() bool
 	RequireParam() bool
@@ -49,12 +55,12 @@ var commands = map[string]command{
 	"ACCT": nil,
 	"ALLO": nil,
 	"APPE": nil,
-	"CDUP": nil,
-	"CWD":  nil,
+	"CDUP": commandCdup{},
+	"CWD":  commandCwd{},
 	"DELE": nil,
 	"HELP": nil,
 	"LIST": nil,
-	"MKD":  nil,
+	"MKD":  commandMkd{},
 	"NLST": nil,
 	"NOOP": nil,
 	"MODE": nil,
@@ -65,7 +71,7 @@ var commands = map[string]command{
 	"QUIT": commandQuit{},
 	"REIN": nil,
 	"RETR": commandRetr{},
-	"RMD":  nil,
+	"RMD":  commandRmd{},
 	"RNFR": nil,
 	"RNTO": nil,
 	"SITE": nil,
@@ -127,6 +133,60 @@ func (commandAbor) Execute(ctx context.Context, c *ServerConn, cmd *Command) {
 	c.dt.Abort()
 }
 
+type commandCdup struct{}
+
+func (commandCdup) IsExtend() bool     { return false }
+func (commandCdup) RequireParam() bool { return false }
+func (commandCdup) RequireAuth() bool  { return true }
+
+func (commandCdup) Execute(ctx context.Context, c *ServerConn, cmd *Command) {
+	if c.pwd == "" || c.pwd == "/" {
+		c.WriteReply(StatusNeedSomeUnavailableResource, "No such directory.")
+		return
+	}
+	c.pwd = pkgpath.Dir(c.pwd)
+	c.WriteReply(StatusCommandOK, fmt.Sprintf("Directory changed to %s.", c.pwd))
+}
+
+type commandCwd struct{}
+
+func (commandCwd) IsExtend() bool     { return false }
+func (commandCwd) RequireParam() bool { return true }
+func (commandCwd) RequireAuth() bool  { return true }
+
+func (commandCwd) Execute(ctx context.Context, c *ServerConn, cmd *Command) {
+	path := c.buildPath(cmd.Arg)
+	stat, err := c.fileSystem().Stat(ctx, path)
+	if err != nil || !stat.IsDir() {
+		c.WriteReply(StatusNeedSomeUnavailableResource, "No such directory.")
+		return
+	}
+	c.pwd = path
+	c.WriteReply(StatusCommandOK, fmt.Sprintf("Directory changed to %s.", path))
+}
+
+type commandMkd struct{}
+
+func (commandMkd) IsExtend() bool     { return false }
+func (commandMkd) RequireParam() bool { return true }
+func (commandMkd) RequireAuth() bool  { return true }
+
+func (commandMkd) Execute(ctx context.Context, c *ServerConn, cmd *Command) {
+	path := c.buildPath(cmd.Arg)
+	if err := c.fileSystem().Mkdir(ctx, path); err != nil {
+		if os.IsExist(err) {
+			c.WriteReply(
+				StatusDirectoryAlreadyExists,
+				fmt.Sprintf(`"%s" directory already exists; taking no action.`, escapeQuote.Replace(path)),
+			)
+			return
+		}
+		c.WriteReply(StatusBadCommand, "Internal error.")
+		return
+	}
+	c.WriteReply(StatusPathCreated, fmt.Sprintf(`"%s" directory created.`, escapeQuote.Replace(path)))
+}
+
 type commandPass struct{}
 
 func (commandPass) IsExtend() bool     { return false }
@@ -142,6 +202,7 @@ func (commandPass) Execute(ctx context.Context, c *ServerConn, cmd *Command) {
 		c.WriteReply(StatusBadCommand, "Internal error.")
 	}
 	c.auth = auth
+	c.pwd = "/"
 	c.WriteReply(StatusLoggedIn, "User logged in, proceed.")
 }
 
@@ -225,8 +286,8 @@ func (commandPwd) RequireParam() bool { return false }
 func (commandPwd) RequireAuth() bool  { return true }
 
 func (commandPwd) Execute(ctx context.Context, c *ServerConn, cmd *Command) {
-	// TODO: It's dummy response. fix me plz.
-	c.WriteReply(StatusPathCreated, `"/"`)
+	pwd := escapeQuote.Replace(c.pwd)
+	c.WriteReply(StatusPathCreated, fmt.Sprintf(`"%s"`, pwd))
 }
 
 // commandQuit closes the control connection
@@ -279,6 +340,26 @@ func (commandRetr) Execute(ctx context.Context, c *ServerConn, cmd *Command) {
 
 		c.WriteReply(StatusClosingDataConnection, fmt.Sprintf("Data transfer starting %d bytes", n))
 	}()
+}
+
+// RMD: Remove the directory with the name "pathname".
+type commandRmd struct{}
+
+func (commandRmd) IsExtend() bool     { return false }
+func (commandRmd) RequireParam() bool { return true }
+func (commandRmd) RequireAuth() bool  { return true }
+
+func (commandRmd) Execute(ctx context.Context, c *ServerConn, cmd *Command) {
+	path := c.buildPath(cmd.Arg)
+	if err := c.fileSystem().Remove(ctx, path); err != nil {
+		if os.IsNotExist(err) {
+			c.WriteReply(StatusNeedSomeUnavailableResource, "No such directory.")
+			return
+		}
+		c.WriteReply(StatusBadCommand, "Internal error.")
+		return
+	}
+	c.WriteReply(StatusCommandOK, "Removed directory "+path)
 }
 
 // commandStor

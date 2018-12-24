@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"log"
 	"net"
+	pkgpath "path"
 	"sync"
 	"time"
 
@@ -35,6 +36,9 @@ type ServerConn struct {
 
 	user string
 	auth *Authorization
+
+	// pwd is current working directory.
+	pwd string
 
 	// TLS connection is enabled.
 	tls bool
@@ -202,4 +206,11 @@ func (c *ServerConn) publicIPv4() net.IP {
 		return addr.IP.To4()
 	}
 	return nil
+}
+
+func (c *ServerConn) buildPath(path string) string {
+	if pkgpath.IsAbs(path) {
+		return pkgpath.Clean(path)
+	}
+	return pkgpath.Clean(pkgpath.Join(c.pwd, path))
 }
