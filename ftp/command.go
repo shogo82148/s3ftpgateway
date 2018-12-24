@@ -56,7 +56,7 @@ var commands = map[string]command{
 	// https://tools.ietf.org/html/rfc959
 	"ABOR": commandAbor{},
 	"ACCT": commandAcct{},
-	"ALLO": nil,
+	"ALLO": commandAllo{},
 	"APPE": nil,
 	"CDUP": commandCdup{},
 	"CWD":  commandCwd{},
@@ -148,6 +148,21 @@ func (commandAcct) Execute(ctx context.Context, c *ServerConn, cmd *Command) {
 	// permission was already granted in response to USER or PASS.
 	// no need to use ACCT.
 	c.WriteReply(StatusCommandNotImplemented, "Permission was already granted.")
+}
+
+// ALLOCATE (ALLO)
+// This command may be required by some servers to reserve
+// sufficient storage to accommodate the new file to be
+// transferred.
+type commandAllo struct{}
+
+func (commandAllo) IsExtend() bool     { return false }
+func (commandAllo) RequireParam() bool { return true }
+func (commandAllo) RequireAuth() bool  { return true }
+
+func (commandAllo) Execute(ctx context.Context, c *ServerConn, cmd *Command) {
+	// ALLO is obsolete.
+	c.WriteReply(StatusCommandNotImplemented, "Obsolete.")
 }
 
 type commandCdup struct{}
