@@ -102,6 +102,56 @@ func (perl *perlExecutor) Prove(ctx context.Context, t *testing.T, script string
 	}
 }
 
+func TestPwd(t *testing.T) {
+	perl, err := newPerlExecutor()
+	if err != nil {
+		t.Skipf("perl is required for this test: %v", err)
+		return
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+
+	ts := ftptest.NewServer(mapfs.New(map[string]string{
+		"foo/bar/hoge/fuga.txt": "Hello ftp!",
+	}))
+	defer ts.Close()
+	ts.Config.Logger = testLogger{t}
+
+	u, err := url.Parse(ts.URL)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	script := `use utf8;
+use strict;
+use warnings;
+use Test::More;
+use Net::FTP;
+
+my $host = shift;
+my $ftp = Net::FTP->new($host, Debug => 1) or die "fail to connect ftp server: $@";
+ok $ftp->login('anonymous', 'foobar@example.com'), 'login';
+
+is $ftp->pwd(), '/', 'initial currect working directory';
+ok $ftp->cwd('/foo/bar'), 'cwd /foo/bar';
+is $ftp->pwd(), '/foo/bar';
+
+ok !$ftp->cwd('/not-exist'), 'not such directory';
+is $ftp->pwd(), '/foo/bar';
+
+ok !$ftp->cwd('/foo/bar/hoge/fuga.txt'), 'not directory';
+is $ftp->pwd(), '/foo/bar';
+
+ok $ftp->cdup(), 'CDUP';
+is $ftp->pwd(), '/foo';
+
+done_testing;
+`
+
+	perl.Prove(ctx, t, script, u.Host)
+}
+
 func TestPortPasv(t *testing.T) {
 	perl, err := newPerlExecutor()
 	if err != nil {
