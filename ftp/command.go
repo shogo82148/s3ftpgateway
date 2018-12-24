@@ -61,7 +61,7 @@ var commands = map[string]command{
 	"CDUP": commandCdup{},
 	"CWD":  commandCwd{},
 	"DELE": commandDele{},
-	"HELP": nil,
+	"HELP": commandHelp{},
 	"LIST": commandList{},
 	"MKD":  commandMkd{},
 	"NLST": commandNlst{},
@@ -202,6 +202,30 @@ func (commandDele) Execute(ctx context.Context, c *ServerConn, cmd *Command) {
 		return
 	}
 	c.WriteReply(StatusCommandOK, "Removed directory "+path)
+}
+
+// HELP (HELP)
+// This command shall cause the server to send helpful
+// information regarding its implementation status over the
+// control connection to the user.
+type commandHelp struct{}
+
+func (commandHelp) IsExtend() bool     { return false }
+func (commandHelp) RequireParam() bool { return false }
+func (commandHelp) RequireAuth() bool  { return true }
+
+func (commandHelp) Execute(ctx context.Context, c *ServerConn, cmd *Command) {
+	if cmd.Arg == "" {
+		c.WriteReply(StatusHelp, "s3ftpgateway - https://github.com/shogo82148/s3ftpgateway")
+		return
+	}
+	name := strings.ToUpper(cmd.Arg)
+	command, ok := commands[name]
+	if !ok || command == nil {
+		c.WriteReply(StatusNotImplemented, fmt.Sprintf("Unknown command %s.", name))
+		return
+	}
+	c.WriteReply(StatusHelp, fmt.Sprintf("%s.", name))
 }
 
 // LIST (LIST)
