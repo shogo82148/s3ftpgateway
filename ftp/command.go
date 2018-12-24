@@ -55,7 +55,7 @@ var commands = map[string]command{
 	// FILE TRANSFER PROTOCOL (FTP)
 	// https://tools.ietf.org/html/rfc959
 	"ABOR": commandAbor{},
-	"ACCT": nil,
+	"ACCT": commandAcct{},
 	"ALLO": nil,
 	"APPE": nil,
 	"CDUP": commandCdup{},
@@ -130,10 +130,24 @@ type commandAbor struct{}
 
 func (commandAbor) IsExtend() bool     { return false }
 func (commandAbor) RequireParam() bool { return true }
-func (commandAbor) RequireAuth() bool  { return false }
+func (commandAbor) RequireAuth() bool  { return true }
 
 func (commandAbor) Execute(ctx context.Context, c *ServerConn, cmd *Command) {
 	c.dt.Abort()
+}
+
+// ACCOUNT (ACCT)
+// The argument field is a Telnet string identifying the user's account.
+type commandAcct struct{}
+
+func (commandAcct) IsExtend() bool     { return false }
+func (commandAcct) RequireParam() bool { return true }
+func (commandAcct) RequireAuth() bool  { return true }
+
+func (commandAcct) Execute(ctx context.Context, c *ServerConn, cmd *Command) {
+	// permission was already granted in response to USER or PASS.
+	// no need to use ACCT.
+	c.WriteReply(StatusCommandNotImplemented, "Permission was already granted.")
 }
 
 type commandCdup struct{}
