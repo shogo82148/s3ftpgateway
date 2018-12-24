@@ -63,7 +63,7 @@ var commands = map[string]command{
 	"LIST": commandList{},
 	"MKD":  commandMkd{},
 	"NLST": commandNlst{},
-	"NOOP": nil,
+	"NOOP": commandNoop{},
 	"MODE": nil,
 	"PASS": commandPass{},
 	"PASV": commandPasv{},
@@ -314,6 +314,19 @@ func (commandNlst) Execute(ctx context.Context, c *ServerConn, cmd *Command) {
 		c.WriteReply(StatusClosingDataConnection, fmt.Sprintf("Data transfer starting %d bytes", bytes))
 	}()
 
+}
+
+// NOOP (NOOP)
+// This command does not affect any parameters or previously
+// entered commands.
+type commandNoop struct{}
+
+func (commandNoop) IsExtend() bool     { return false }
+func (commandNoop) RequireParam() bool { return false }
+func (commandNoop) RequireAuth() bool  { return false }
+
+func (commandNoop) Execute(ctx context.Context, c *ServerConn, cmd *Command) {
+	c.WriteReply(StatusCommandOK, "Okay.")
 }
 
 type commandPass struct{}
