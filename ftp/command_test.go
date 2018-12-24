@@ -568,6 +568,67 @@ done_testing;
 	}
 }
 
+func TestStou(t *testing.T) {
+	perl, err := newPerlExecutor()
+	if err != nil {
+		t.Skipf("perl is required for this test: %v", err)
+		return
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+
+	fs := mapfs.New(map[string]string{})
+	ts := ftptest.NewServer(fs)
+	defer ts.Close()
+	ts.Config.Logger = testLogger{t}
+
+	u, err := url.Parse(ts.URL)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	script := `use utf8;
+use strict;
+use warnings;
+use Test::More;
+use Net::FTP;
+
+my $host = shift;
+my $ftp = Net::FTP->new($host, Debug => 1) or die "fail to connect ftp server: $@";
+ok $ftp->login('anonymous', 'foobar@example.com'), 'login';
+
+eval {
+	my $name1 = do {
+		my $content = "Hello ftp!";
+		open my $fh, "<", \$content;
+		ok my $name = $ftp->put_unique($fh), 'put_unique';
+		close $fh;
+		$name;
+	};
+	
+	my $name2 = do {
+		my $content = "Hello ftp!";
+		open my $fh, "<", \$content;
+		ok my $name = $ftp->put_unique($fh), 'put_unique';
+		close $fh;
+		$name;
+	};
+	
+	isnt $name1, $name2;
+};
+if ($@ =~ /Must specify remote filename with stream input/i) {
+	# put_unique doesn't work correctly on old version of Net::FTP.
+	plan skip_all => 'put_unique is not support';
+}
+
+ok $ftp->quit(), 'quit';
+done_testing;
+`
+
+	perl.Prove(ctx, t, script, u.Host)
+}
+
 func TestEprt(t *testing.T) {
 	perl, err := newPerlExecutor()
 	if err != nil {
