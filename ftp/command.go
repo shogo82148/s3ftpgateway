@@ -58,7 +58,7 @@ var commands = map[string]command{
 	"APPE": nil,
 	"CDUP": commandCdup{},
 	"CWD":  commandCwd{},
-	"DELE": nil,
+	"DELE": commandDele{},
 	"HELP": nil,
 	"LIST": commandList{},
 	"MKD":  commandMkd{},
@@ -164,6 +164,28 @@ func (commandCwd) Execute(ctx context.Context, c *ServerConn, cmd *Command) {
 	}
 	c.pwd = path
 	c.WriteReply(StatusCommandOK, fmt.Sprintf("Directory changed to %s.", path))
+}
+
+// DELETE (DELE)
+// This command causes the file specified in the pathname to be
+// deleted at the server site.
+type commandDele struct{}
+
+func (commandDele) IsExtend() bool     { return false }
+func (commandDele) RequireParam() bool { return true }
+func (commandDele) RequireAuth() bool  { return true }
+
+func (commandDele) Execute(ctx context.Context, c *ServerConn, cmd *Command) {
+	path := c.buildPath(cmd.Arg)
+	if err := c.fileSystem().Remove(ctx, path); err != nil {
+		if os.IsNotExist(err) {
+			c.WriteReply(StatusNeedSomeUnavailableResource, "No such file.")
+			return
+		}
+		c.WriteReply(StatusBadCommand, "Internal error.")
+		return
+	}
+	c.WriteReply(StatusCommandOK, "Removed directory "+path)
 }
 
 // LIST (LIST)
