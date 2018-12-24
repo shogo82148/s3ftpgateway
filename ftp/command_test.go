@@ -244,6 +244,47 @@ done_testing;
 	perl.Prove(ctx, t, script, u.Host)
 }
 
+func TestNlst(t *testing.T) {
+	perl, err := newPerlExecutor()
+	if err != nil {
+		t.Skipf("perl is required for this test: %v", err)
+		return
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+
+	ts := ftptest.NewServer(mapfs.New(map[string]string{
+		"foo/bar/hoge.txt": "abc123",
+		"hogehoge.txt":     "foobar",
+	}))
+	defer ts.Close()
+	ts.Config.Logger = testLogger{t}
+
+	u, err := url.Parse(ts.URL)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	script := `use utf8;
+use strict;
+use warnings;
+use Test::More;
+use Net::FTP;
+
+my $host = shift;
+my $ftp = Net::FTP->new($host, Debug => 1) or die "fail to connect ftp server: $@";
+ok $ftp->login('anonymous', 'foobar@example.com'), 'login';
+my @files = $ftp->ls();
+is $files[0], 'foo';
+is $files[1], 'hogehoge.txt';
+ok $ftp->quit();
+done_testing;
+`
+
+	perl.Prove(ctx, t, script, u.Host)
+}
+
 func TestPortPasv(t *testing.T) {
 	perl, err := newPerlExecutor()
 	if err != nil {

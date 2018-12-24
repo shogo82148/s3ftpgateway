@@ -62,7 +62,7 @@ var commands = map[string]command{
 	"HELP": nil,
 	"LIST": commandList{},
 	"MKD":  commandMkd{},
-	"NLST": nil,
+	"NLST": commandNlst{},
 	"NOOP": nil,
 	"MODE": nil,
 	"PASS": commandPass{},
@@ -242,6 +242,56 @@ func (commandMkd) Execute(ctx context.Context, c *ServerConn, cmd *Command) {
 		return
 	}
 	c.WriteReply(StatusPathCreated, fmt.Sprintf(`"%s" directory created.`, escapeQuote.Replace(path)))
+}
+
+// NAME LIST (NLST)
+// This command causes a directory listing to be sent from
+// server to user site.
+type commandNlst struct{}
+
+func (commandNlst) IsExtend() bool     { return false }
+func (commandNlst) RequireParam() bool { return false }
+func (commandNlst) RequireAuth() bool  { return true }
+
+func (commandNlst) Execute(ctx context.Context, c *ServerConn, cmd *Command) {
+	path := c.pwd
+	if cmd.Arg != "" {
+		path = c.buildPath(cmd.Arg)
+	}
+	info, err := c.fileSystem().ReadDir(ctx, path)
+	if err != nil {
+		if os.IsNotExist(err) {
+			c.WriteReply(StatusNeedSomeUnavailableResource, "No such directory.")
+			return
+		}
+		c.WriteReply(StatusBadCommand, "Internal error.")
+		return
+	}
+	c.WriteReply(StatusAboutToSend, "File status okay; about to open data connection.")
+
+	conn, err := c.dt.Conn(ctx)
+	if err != nil {
+		c.server.logger().Printf(c.sessionID, "fail to start data connection: %v", err)
+		c.WriteReply(StatusTransfertAborted, "Requested file action aborted.")
+		return
+	}
+
+	go func() {
+		defer conn.Close()
+		w := bufio.NewWriter(conn)
+		bytes := int64(0)
+		for _, fi := range info {
+			n, _ := fmt.Fprintf(w, "%s\r\n", fi.Name())
+			bytes += int64(n)
+		}
+		if err := w.Flush(); err != nil {
+			c.server.logger().Printf(c.sessionID, "fail to list directory: %v", err)
+			c.WriteReply(StatusActionAborted, "Requested file action aborted.")
+			return
+		}
+		c.WriteReply(StatusClosingDataConnection, fmt.Sprintf("Data transfer starting %d bytes", bytes))
+	}()
+
 }
 
 type commandPass struct{}
