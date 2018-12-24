@@ -146,6 +146,12 @@ is $ftp->pwd(), '/foo/bar';
 ok $ftp->cdup(), 'CDUP';
 is $ftp->pwd(), '/foo';
 
+ok $ftp->cdup(), 'CDUP';
+is $ftp->pwd(), '/';
+
+ok !$ftp->cdup(), 'try to CDUP to out side of the root';
+is $ftp->pwd(), '/';
+
 done_testing;
 `
 
