@@ -598,16 +598,29 @@ my $host = shift;
 my $ftp = Net::FTP->new($host, Debug => 1) or die "fail to connect ftp server: $@";
 ok $ftp->login('anonymous', 'foobar@example.com'), 'login';
 
-my $content = "Hello ftp!";
-open my $fh, "<", \$content;
-ok my $name1 = $ftp->put_unique($fh), 'put_unique';
-close $fh;
-
-open my $fh, "<", \$content;
-ok my $name2 = $ftp->put_unique($fh), 'put_unique';
-close $fh;
-
-isnt $name1, $name2;
+eval {
+	my $name1 = do {
+		my $content = "Hello ftp!";
+		open my $fh, "<", \$content;
+		ok my $name = $ftp->put_unique($fh), 'put_unique';
+		close $fh;
+		$name;
+	};
+	
+	my $name2 = do {
+		my $content = "Hello ftp!";
+		open my $fh, "<", \$content;
+		ok my $name = $ftp->put_unique($fh), 'put_unique';
+		close $fh;
+		$name;
+	};
+	
+	isnt $name1, $name2;
+};
+if ($@ =~ /Must specify remote filename with stream input/i) {
+	# put_unique doesn't work correctly on old version of Net::FTP.
+	plan skip_all => 'put_unique is not support';
+}
 
 ok $ftp->quit(), 'quit';
 done_testing;
