@@ -8,6 +8,7 @@ import (
 	"io"
 	"log"
 	"net"
+	"os"
 	pkgpath "path"
 	"sync"
 	"time"
@@ -223,4 +224,15 @@ func (c *ServerConn) buildPath(path string) string {
 		return pkgpath.Clean(path)
 	}
 	return pkgpath.Clean(pkgpath.Join(c.pwd, path))
+}
+
+func (c *ServerConn) formatFileInfo(fi os.FileInfo) string {
+	return fmt.Sprintf(
+		"%s 1 %s %s %13d %s %s",
+		fi.Mode(),
+		c.auth.User, c.auth.User,
+		fi.Size(),
+		fi.ModTime().Format(" Jan _2 15:04"),
+		fi.Name(),
+	)
 }
