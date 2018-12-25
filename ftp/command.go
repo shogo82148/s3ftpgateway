@@ -66,7 +66,7 @@ var commands = map[string]command{
 	"MKD":  commandMkd{},
 	"NLST": commandNlst{},
 	"NOOP": commandNoop{},
-	"MODE": nil,
+	"MODE": commandMode{},
 	"PASS": commandPass{},
 	"PASV": commandPasv{},
 	"PORT": commandPort{},
