@@ -79,7 +79,7 @@ var commands = map[string]command{
 	"RNFR": commandRnfr{},
 	"RNTO": commandRnto{},
 	"SITE": nil,
-	"SMNT": nil,
+	// "SMNT": nil, // mount is not permitted.
 	"STAT": nil,
 	"STOR": commandStor{},
 	"STOU": commandStou{},
