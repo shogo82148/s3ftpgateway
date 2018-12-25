@@ -84,7 +84,7 @@ var commands = map[string]command{
 	"STOR": commandStor{},
 	"STOU": commandStou{},
 	"STRU": commandStru{},
-	"SYST": nil,
+	"SYST": commandSyst{},
 	"TYPE": commandType{},
 	"USER": commandUser{},
 
@@ -810,6 +810,19 @@ func (commandStru) Execute(ctx context.Context, c *ServerConn, cmd *Command) {
 		// case "P", "p": // Page structure
 	}
 	c.WriteReply(StatusNotImplementedParameter, "Unknown file structure.")
+}
+
+// SYSTEM (SYST)
+// This command is used to find out the type of operating
+// system at the server.
+type commandSyst struct{}
+
+func (commandSyst) IsExtend() bool     { return false }
+func (commandSyst) RequireParam() bool { return false }
+func (commandSyst) RequireAuth() bool  { return true }
+
+func (commandSyst) Execute(ctx context.Context, c *ServerConn, cmd *Command) {
+	c.WriteReply(StatusName, "UNIX Type: L8")
 }
 
 // commandType
