@@ -135,7 +135,7 @@ var commands = map[string]command{
 
 	// Internationalization of the File Transfer Protocol
 	// https://tools.ietf.org/html/rfc2640
-	"LANG": nil,
+	"LANG": commandLang{},
 
 	// Extensions to FTP
 	// https://tools.ietf.org/html/rfc3659
@@ -1105,6 +1105,28 @@ func (commandEpsv) Execute(ctx context.Context, c *ServerConn, cmd *Command) {
 	}
 	addr := dt.l.Addr().(*net.TCPAddr)
 	c.WriteReply(StatusExtendedPassiveMode, fmt.Sprintf("Entering extended passive mode (|||%d|)", addr.Port))
+}
+
+// Internationalization of the File Transfer Protocol
+// https://tools.ietf.org/html/rfc2640
+type commandLang struct{}
+
+func (commandLang) IsExtend() bool       { return true }
+func (commandLang) RequireParam() bool   { return true }
+func (commandLang) RequireAuth() bool    { return false }
+func (commandLang) FeatureParam() string { return "EN*" }
+
+func (commandLang) Execute(ctx context.Context, c *ServerConn, cmd *Command) {
+	args := strings.Split(cmd.Arg, "-")
+	if len(args) < 1 {
+		c.WriteReply(StatusBadArguments, "Syntax error in patameter.")
+		return
+	}
+	if !strings.EqualFold(args[0], "en") {
+		c.WriteReply(StatusNotImplemented, fmt.Sprintf("Language %s is not supported.", cmd.Arg))
+		return
+	}
+	c.WriteReply(StatusCommandOK, fmt.Sprintf("Language change to %s", cmd.Arg))
 }
 
 // Extensions to FTP
