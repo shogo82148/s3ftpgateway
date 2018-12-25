@@ -11,6 +11,7 @@ import (
 	"net"
 	"os"
 	pkgpath "path"
+	"sort"
 	"strconv"
 	"strings"
 )
@@ -119,7 +120,7 @@ var commands = map[string]command{
 
 	// Feature negotiation mechanism for the File Transfer Protocol
 	// https://tools.ietf.org/html/rfc2389
-	"FEAT": nil,
+	"FEAT": commandFeat{},
 	"OPTS": nil,
 
 	// FTP Extensions for IPv6 and NATs
@@ -940,6 +941,28 @@ func (commandProt) Execute(ctx context.Context, c *ServerConn, cmd *Command) {
 			c.WriteReply(StatusProtLevelNotSupported, "Private level is only supported in TLS.")
 		}
 	}
+}
+
+// Feature negotiation mechanism for the File Transfer Protocol
+// https://tools.ietf.org/html/rfc2389
+
+type commandFeat struct{}
+
+func (commandFeat) IsExtend() bool     { return false }
+func (commandFeat) RequireParam() bool { return false }
+func (commandFeat) RequireAuth() bool  { return false }
+
+func (commandFeat) Execute(ctx context.Context, c *ServerConn, cmd *Command) {
+	cmds := []string{}
+	for k, v := range commands {
+		if v != nil && v.IsExtend() {
+			cmds = append(cmds, " "+k)
+		}
+	}
+	sort.Strings(cmds)
+	cmds = append([]string{"Extensions supported:", " UTF8"}, cmds...)
+	cmds = append(cmds, "End.")
+	c.WriteReply(StatusSystem, cmds...)
 }
 
 // FTP Extensions for IPv6 and NATs
