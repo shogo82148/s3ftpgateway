@@ -11,6 +11,7 @@ import (
 	"net"
 	"os"
 	pkgpath "path"
+	"sort"
 	"strconv"
 	"strings"
 )
@@ -63,6 +64,10 @@ type command interface {
 	RequireParam() bool
 	RequireAuth() bool
 	Execute(ctx context.Context, c *ServerConn, cmd *Command)
+}
+
+type featureParam interface {
+	FeatureParam() string
 }
 
 var commands = map[string]command{
@@ -119,8 +124,8 @@ var commands = map[string]command{
 
 	// Feature negotiation mechanism for the File Transfer Protocol
 	// https://tools.ietf.org/html/rfc2389
-	"FEAT": nil,
-	"OPTS": nil,
+	"FEAT": commandFeat{},
+	"OPTS": commandOpts{},
 
 	// FTP Extensions for IPv6 and NATs
 	// https://tools.ietf.org/html/rfc2428
@@ -888,9 +893,10 @@ func (commandUser) Execute(ctx context.Context, c *ServerConn, cmd *Command) {
 // https://tools.ietf.org/html/rfc2228
 type commandAuth struct{}
 
-func (commandAuth) IsExtend() bool     { return true }
-func (commandAuth) RequireParam() bool { return true }
-func (commandAuth) RequireAuth() bool  { return false }
+func (commandAuth) IsExtend() bool       { return true }
+func (commandAuth) RequireParam() bool   { return true }
+func (commandAuth) RequireAuth() bool    { return false }
+func (commandAuth) FeatureParam() string { return "TLS" }
 
 func (commandAuth) Execute(ctx context.Context, c *ServerConn, cmd *Command) {
 	if !strings.EqualFold(cmd.Arg, "TLS") {
@@ -939,6 +945,61 @@ func (commandProt) Execute(ctx context.Context, c *ServerConn, cmd *Command) {
 		} else {
 			c.WriteReply(StatusProtLevelNotSupported, "Private level is only supported in TLS.")
 		}
+	}
+}
+
+// Feature negotiation mechanism for the File Transfer Protocol
+// https://tools.ietf.org/html/rfc2389
+
+type commandFeat struct{}
+
+// The FEAT command is extended command,
+// while it is not included in the list of features supported.
+func (commandFeat) IsExtend() bool { return false }
+
+func (commandFeat) RequireParam() bool { return false }
+func (commandFeat) RequireAuth() bool  { return false }
+
+func (commandFeat) Execute(ctx context.Context, c *ServerConn, cmd *Command) {
+	cmds := []string{}
+	for k, v := range commands {
+		if v == nil || !v.IsExtend() {
+			continue
+		}
+		if f, ok := v.(featureParam); ok {
+			k += " " + f.FeatureParam()
+		}
+		cmds = append(cmds, " "+k)
+	}
+	sort.Strings(cmds)
+	cmds = append([]string{"Extensions supported:", " UTF8"}, cmds...)
+	cmds = append(cmds, "End.")
+	c.WriteReply(StatusSystem, cmds...)
+}
+
+type commandOpts struct{}
+
+// The OPTS command is extended command,
+// while it is not included in the list of features supported.
+func (commandOpts) IsExtend() bool { return false }
+
+func (commandOpts) RequireParam() bool { return false }
+func (commandOpts) RequireAuth() bool  { return false }
+
+func (commandOpts) Execute(ctx context.Context, c *ServerConn, cmd *Command) {
+	parts := strings.Fields(cmd.Arg)
+	if len(parts) != 2 {
+		c.WriteReply(StatusBadArguments, "Invalid option.")
+		return
+	}
+	if !strings.EqualFold(parts[0], "utf8") {
+		c.WriteReply(StatusBadArguments, "Invalid option.")
+		return
+	}
+	if strings.EqualFold(parts[1], "on") {
+		c.WriteReply(StatusCommandOK, "UTF8 mode enabled.")
+	} else {
+		c.WriteReply(StatusBadArguments, "Unsupported non-utf8 mode.")
 	}
 }
 
