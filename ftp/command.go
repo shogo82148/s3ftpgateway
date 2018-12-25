@@ -108,8 +108,9 @@ var commands = map[string]command{
 
 	// FTP Operation Over Big Address Records (FOOBAR)
 	// https://tools.ietf.org/html/rfc1639
-	"LPRT": nil,
-	"LPSV": nil,
+	// These commands are obsoleted by https://tools.ietf.org/html/rfc5797
+	// "LPRT": commandLprt{},
+	// "LPSV": commandLpsv{},
 
 	// FTP Security Extensions
 	// https://tools.ietf.org/html/rfc2228

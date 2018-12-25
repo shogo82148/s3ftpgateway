@@ -20,7 +20,6 @@ const (
 	StatusDataConnectionOpen    = 225 // Data connection open; no transfer in progress.
 	StatusClosingDataConnection = 226 // Closing data connection.
 	StatusPassiveMode           = 227 // Entering Passive Mode
-	StatusLongPassiveMode       = 228
 	StatusExtendedPassiveMode   = 229
 	StatusLoggedIn              = 230 // User logged in, proceed.
 	StatusRequestedFileActionOK = 250 // Requested file action okay, completed.
