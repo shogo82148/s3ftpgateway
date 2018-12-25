@@ -66,6 +66,10 @@ type command interface {
 	Execute(ctx context.Context, c *ServerConn, cmd *Command)
 }
 
+type featureParam interface {
+	FeatureParam() string
+}
+
 var commands = map[string]command{
 	// FILE TRANSFER PROTOCOL (FTP)
 	// https://tools.ietf.org/html/rfc959
@@ -889,9 +893,10 @@ func (commandUser) Execute(ctx context.Context, c *ServerConn, cmd *Command) {
 // https://tools.ietf.org/html/rfc2228
 type commandAuth struct{}
 
-func (commandAuth) IsExtend() bool     { return true }
-func (commandAuth) RequireParam() bool { return true }
-func (commandAuth) RequireAuth() bool  { return false }
+func (commandAuth) IsExtend() bool       { return true }
+func (commandAuth) RequireParam() bool   { return true }
+func (commandAuth) RequireAuth() bool    { return false }
+func (commandAuth) FeatureParam() string { return "TLS" }
 
 func (commandAuth) Execute(ctx context.Context, c *ServerConn, cmd *Command) {
 	if !strings.EqualFold(cmd.Arg, "TLS") {
@@ -948,16 +953,23 @@ func (commandProt) Execute(ctx context.Context, c *ServerConn, cmd *Command) {
 
 type commandFeat struct{}
 
-func (commandFeat) IsExtend() bool     { return false }
+// The FEAT command is extended command,
+// while it is not included in the list of features supported.
+func (commandFeat) IsExtend() bool { return false }
+
 func (commandFeat) RequireParam() bool { return false }
 func (commandFeat) RequireAuth() bool  { return false }
 
 func (commandFeat) Execute(ctx context.Context, c *ServerConn, cmd *Command) {
 	cmds := []string{}
 	for k, v := range commands {
-		if v != nil && v.IsExtend() {
-			cmds = append(cmds, " "+k)
+		if v == nil || !v.IsExtend() {
+			continue
 		}
+		if f, ok := v.(featureParam); ok {
+			k += " " + f.FeatureParam()
+		}
+		cmds = append(cmds, " "+k)
 	}
 	sort.Strings(cmds)
 	cmds = append([]string{"Extensions supported:", " UTF8"}, cmds...)
