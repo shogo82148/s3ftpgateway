@@ -79,11 +79,11 @@ var commands = map[string]command{
 	"RNFR": commandRnfr{},
 	"RNTO": commandRnto{},
 	"SITE": nil,
-	"SMNT": nil,
+	// "SMNT": nil, // mount is not permitted.
 	"STAT": nil,
 	"STOR": commandStor{},
 	"STOU": commandStou{},
-	"STRU": nil,
+	"STRU": commandStru{},
 	"SYST": nil,
 	"TYPE": commandType{},
 	"USER": commandUser{},
@@ -788,6 +788,28 @@ func (commandStou) Execute(ctx context.Context, c *ServerConn, cmd *Command) {
 		}
 		c.WriteReply(StatusClosingDataConnection, fmt.Sprintf("OK, received %d bytes. unique file name: %s", r.count, name))
 	}()
+}
+
+// FILE STRUCTURE (STRU)
+// The argument is a single Telnet character code specifying
+// file structure described in the Section on Data
+// Representation and Storage.
+type commandStru struct{}
+
+func (commandStru) IsExtend() bool     { return false }
+func (commandStru) RequireParam() bool { return true }
+func (commandStru) RequireAuth() bool  { return true }
+
+func (commandStru) Execute(ctx context.Context, c *ServerConn, cmd *Command) {
+	switch cmd.Arg {
+	case "F", "f": // File (no record structure)
+		c.WriteReply(StatusCommandOK, "Set file structure to file.")
+		return
+		// RFC 959 assigns the following modes, but they are obsolete.
+		// case "R", "r": // Record structure
+		// case "P", "p": // Page structure
+	}
+	c.WriteReply(StatusNotImplementedParameter, "Unknown file structure.")
 }
 
 // commandType
