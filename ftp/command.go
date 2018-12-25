@@ -384,6 +384,28 @@ func (commandNoop) Execute(ctx context.Context, c *ServerConn, cmd *Command) {
 	c.WriteReply(StatusCommandOK, "Okay.")
 }
 
+// TRANSFER MODE (MODE)
+// The argument is a single Telnet character code specifying
+// the data transfer modes described in the Section on
+// Transmission Modes.
+type commandMode struct{}
+
+func (commandMode) IsExtend() bool     { return false }
+func (commandMode) RequireParam() bool { return true }
+func (commandMode) RequireAuth() bool  { return true }
+
+func (commandMode) Execute(ctx context.Context, c *ServerConn, cmd *Command) {
+	switch cmd.Arg {
+	case "S", "s": // Stream Mode
+		c.WriteReply(StatusCommandOK, "Change transfer mode to stream.")
+		return
+		// RFC 959 assigns the following modes, but they are obsolete.
+		// case "B", "b": // Block Mode
+		// case "C", "c": // Compressed Mode
+	}
+	c.WriteReply(StatusNotImplementedParameter, "Unknown transfer mode.")
+}
+
 type commandPass struct{}
 
 func (commandPass) IsExtend() bool     { return false }
