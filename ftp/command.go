@@ -45,6 +45,19 @@ var escapeQuote = strings.NewReplacer(
 	`"`, `""`,
 )
 
+// helper function for handling file error (e.g. Open, Stat)
+func handleFileError(c *ServerConn, err error) {
+	if os.IsNotExist(err) {
+		c.WriteReply(StatusFileUnavailable, "No such file.")
+		return
+	} else if os.IsPermission(err) {
+		c.WriteReply(StatusFileUnavailable, "Permission is denied.")
+		return
+	}
+	c.server.logger().Printf(c.sessionID, "fail to open file: %v", err)
+	c.WriteReply(StatusBadCommand, "Internal error.")
+}
+
 type command interface {
 	IsExtend() bool
 	RequireParam() bool
@@ -80,7 +93,7 @@ var commands = map[string]command{
 	"RNTO": commandRnto{},
 	"SITE": nil,
 	// "SMNT": nil, // mount is not permitted.
-	"STAT": nil,
+	"STAT": commandStat{},
 	"STOR": commandStor{},
 	"STOU": commandStou{},
 	"STRU": commandStru{},
@@ -329,22 +342,15 @@ func (commandList) Execute(ctx context.Context, c *ServerConn, cmd *Command) {
 		c.WriteReply(StatusTransfertAborted, "Requested file action aborted.")
 		return
 	}
-	user := c.auth.User
 
 	go func() {
 		defer conn.Close()
 		w := bufio.NewWriter(conn)
 		bytes := int64(0)
 		for _, fi := range info {
-			n, _ := fmt.Fprintf(
-				w,
-				"%s 1 %s %s %13d %s %s\r\n",
-				fi.Mode(),
-				user, user,
-				fi.Size(),
-				fi.ModTime().Format(" Jan _2 15:04"),
-				fi.Name(),
-			)
+			n, _ := io.WriteString(w, c.formatFileInfo(fi))
+			bytes += int64(n)
+			n, _ = io.WriteString(w, "\r\n")
 			bytes += int64(n)
 		}
 		if err := w.Flush(); err != nil {
@@ -704,6 +710,35 @@ func (commandRnto) Execute(ctx context.Context, c *ServerConn, cmd *Command) {
 		fs.Remove(ctx, from)
 		c.WriteReply(StatusRequestedFileActionOK, "Requested file action okay, completed.")
 	}()
+}
+
+// STATUS (STAT)
+// This command shall cause a status response to be sent over
+// the control connection in the form of a reply.
+type commandStat struct{}
+
+func (commandStat) IsExtend() bool     { return false }
+func (commandStat) RequireParam() bool { return false }
+func (commandStat) RequireAuth() bool  { return true }
+
+func (commandStat) Execute(ctx context.Context, c *ServerConn, cmd *Command) {
+	if cmd.Arg == "" {
+		c.WriteReply(StatusSystem, "https://github.com/shogo82148/s3ftpgateway")
+		return
+	}
+
+	fs := c.fileSystem()
+	path := c.buildPath(cmd.Arg)
+	stat, err := fs.Stat(ctx, path)
+	if err != nil {
+		handleFileError(c, err)
+		return
+	}
+	status := StatusFile
+	if stat.IsDir() {
+		status = StatusDirectory
+	}
+	c.WriteReply(status, "STAT", c.formatFileInfo(stat), "End.")
 }
 
 // commandStor
