@@ -7,6 +7,7 @@ import (
 	"encoding/hex"
 	"fmt"
 	"io"
+	"io/ioutil"
 	"net"
 	"os"
 	pkgpath "path"
@@ -57,7 +58,7 @@ var commands = map[string]command{
 	"ABOR": commandAbor{},
 	"ACCT": commandAcct{},
 	"ALLO": commandAllo{},
-	"APPE": nil,
+	"APPE": commandAppe{},
 	"CDUP": commandCdup{},
 	"CWD":  commandCwd{},
 	"DELE": commandDele{},
@@ -165,6 +166,62 @@ func (commandAllo) Execute(ctx context.Context, c *ServerConn, cmd *Command) {
 	c.WriteReply(StatusCommandNotImplemented, "Obsolete.")
 }
 
+// APPEND (with create) (APPE)
+// This command causes the server-DTP to accept the data
+// transferred via the data connection and to store the data in
+// a file at the server site.
+type commandAppe struct{}
+
+func (commandAppe) IsExtend() bool     { return false }
+func (commandAppe) RequireParam() bool { return true }
+func (commandAppe) RequireAuth() bool  { return true }
+
+func (commandAppe) Execute(ctx context.Context, c *ServerConn, cmd *Command) {
+	name := c.buildPath(cmd.Arg)
+	fs := c.fileSystem()
+	r, err := fs.Open(ctx, name)
+	if err != nil {
+		if os.IsNotExist(err) {
+			r = ioutil.NopCloser(strings.NewReader(""))
+		} else if os.IsPermission(err) {
+			c.WriteReply(StatusFileUnavailable, "Permission is denied.")
+			return
+		} else {
+			c.server.logger().Printf(c.sessionID, "fail to open file: %v", err)
+			c.WriteReply(StatusBadCommand, "Internal error.")
+			return
+		}
+	}
+
+	c.WriteReply(StatusAboutToSend, "Data transfer starting")
+	conn, err := c.dt.Conn(ctx)
+	if err != nil {
+		c.server.logger().Printf(c.sessionID, "fail to start data connection: %v", err)
+		c.WriteReply(StatusTransfertAborted, "Requested file action aborted.")
+		return
+	}
+	cr := &countReader{Reader: conn}
+	reader := io.MultiReader(r, cr)
+
+	go func() {
+		defer r.Close()
+		defer conn.Close()
+		err = c.fileSystem().Create(context.Background(), name, reader)
+		if err != nil {
+			c.server.logger().Printf(c.sessionID, "fail to store file: %v", err)
+			c.WriteReply(StatusActionAborted, "Requested file action aborted.")
+			return
+		}
+		c.WriteReply(StatusClosingDataConnection, fmt.Sprintf("OK, received %d bytes.", cr.count))
+	}()
+
+}
+
+// CHANGE TO PARENT DIRECTORY (CDUP)
+// This command is a special case of CWD, and is included to
+// simplify the implementation of programs for transferring
+// directory trees between operating systems having different
+// syntaxes for naming the parent directory.
 type commandCdup struct{}
 
 func (commandCdup) IsExtend() bool     { return false }
