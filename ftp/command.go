@@ -73,7 +73,7 @@ var commands = map[string]command{
 	"PORT": commandPort{},
 	"PWD":  commandPwd{},
 	"QUIT": commandQuit{},
-	"REIN": nil,
+	// "REIN": nil, // a number of FTP servers do not implement it.
 	"RETR": commandRetr{},
 	"RMD":  commandRmd{},
 	"RNFR": commandRnfr{},
