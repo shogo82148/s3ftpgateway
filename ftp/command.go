@@ -139,7 +139,7 @@ var commands = map[string]command{
 
 	// Extensions to FTP
 	// https://tools.ietf.org/html/rfc3659
-	"MDTM": nil,
+	"MDTM": commandMdtm{},
 	"MLSD": nil,
 	"MLST": nil,
 	"REST": nil,
@@ -1132,6 +1132,23 @@ func (commandLang) Execute(ctx context.Context, c *ServerConn, cmd *Command) {
 // Extensions to FTP
 // https://tools.ietf.org/html/rfc3659
 
+// File Modification Time (MDTM)
+type commandMdtm struct{}
+
+func (commandMdtm) IsExtend() bool     { return true }
+func (commandMdtm) RequireParam() bool { return true }
+func (commandMdtm) RequireAuth() bool  { return true }
+
+func (commandMdtm) Execute(ctx context.Context, c *ServerConn, cmd *Command) {
+	fs := c.fileSystem()
+	stat, err := fs.Stat(ctx, cmd.Arg)
+	if err != nil {
+		handleFileError(c, err)
+		return
+	}
+	c.WriteReply(StatusFile, stat.ModTime().UTC().Format("20060102150405.999"))
+}
+
 // commandSize return the file size.
 type commandSize struct{}
 
@@ -1143,7 +1160,7 @@ func (commandSize) Execute(ctx context.Context, c *ServerConn, cmd *Command) {
 	fs := c.fileSystem()
 	stat, err := fs.Stat(ctx, cmd.Arg)
 	if err != nil {
-		c.WriteReply(StatusFileUnavailable, "File system error.")
+		handleFileError(c, err)
 		return
 	}
 	c.WriteReply(StatusFile, strconv.FormatInt(stat.Size(), 10))
