@@ -125,7 +125,7 @@ var commands = map[string]command{
 	// Feature negotiation mechanism for the File Transfer Protocol
 	// https://tools.ietf.org/html/rfc2389
 	"FEAT": commandFeat{},
-	"OPTS": nil,
+	"OPTS": commandOpts{},
 
 	// FTP Extensions for IPv6 and NATs
 	// https://tools.ietf.org/html/rfc2428
@@ -975,6 +975,32 @@ func (commandFeat) Execute(ctx context.Context, c *ServerConn, cmd *Command) {
 	cmds = append([]string{"Extensions supported:", " UTF8"}, cmds...)
 	cmds = append(cmds, "End.")
 	c.WriteReply(StatusSystem, cmds...)
+}
+
+type commandOpts struct{}
+
+// The OPTS command is extended command,
+// while it is not included in the list of features supported.
+func (commandOpts) IsExtend() bool { return false }
+
+func (commandOpts) RequireParam() bool { return false }
+func (commandOpts) RequireAuth() bool  { return false }
+
+func (commandOpts) Execute(ctx context.Context, c *ServerConn, cmd *Command) {
+	parts := strings.Fields(cmd.Arg)
+	if len(parts) != 2 {
+		c.WriteReply(StatusBadArguments, "Invalid option.")
+		return
+	}
+	if !strings.EqualFold(parts[0], "utf8") {
+		c.WriteReply(StatusBadArguments, "Invalid option.")
+		return
+	}
+	if strings.EqualFold(parts[1], "on") {
+		c.WriteReply(StatusCommandOK, "UTF8 mode enabled.")
+	} else {
+		c.WriteReply(StatusBadArguments, "Unsupported non-utf8 mode.")
+	}
 }
 
 // FTP Extensions for IPv6 and NATs
