@@ -197,36 +197,44 @@ func (commandAppe) RequireParam() bool { return true }
 func (commandAppe) RequireAuth() bool  { return true }
 
 func (commandAppe) Execute(ctx context.Context, c *ServerConn, cmd *Command) {
+	tctx, cancel := context.WithCancel(context.Background())
+
 	name := c.buildPath(cmd.Arg)
 	fs := c.fileSystem()
-	r, err := fs.Open(ctx, name)
-	if err != nil {
-		if os.IsNotExist(err) {
-			r = ioutil.NopCloser(strings.NewReader(""))
-		} else if os.IsPermission(err) {
-			c.WriteReply(StatusFileUnavailable, "Permission is denied.")
-			return
-		} else {
-			c.server.logger().Printf(c.sessionID, "fail to open file: %v", err)
-			c.WriteReply(StatusBadCommand, "Internal error.")
+	chSuccess := make(chan bool, 1)
+	go func() {
+		defer cancel()
+		r, err := fs.Open(tctx, name)
+		if err != nil {
+			if os.IsNotExist(err) {
+				r = ioutil.NopCloser(strings.NewReader(""))
+			} else if os.IsPermission(err) {
+				chSuccess <- false
+				c.WriteReply(StatusFileUnavailable, "Permission is denied.")
+				return
+			} else {
+				chSuccess <- false
+				c.server.logger().Printf(c.sessionID, "fail to open file: %v", err)
+				c.WriteReply(StatusBadCommand, "Internal error.")
+				return
+			}
+		}
+		defer r.Close()
+
+		c.WriteReply(StatusAboutToSend, "Data transfer starting")
+		conn, err := c.dt.Conn(tctx)
+		if err != nil {
+			chSuccess <- false
+			c.server.logger().Printf(c.sessionID, "fail to start data connection: %v", err)
+			c.WriteReply(StatusTransfertAborted, "Requested file action aborted.")
 			return
 		}
-	}
-
-	c.WriteReply(StatusAboutToSend, "Data transfer starting")
-	conn, err := c.dt.Conn(ctx)
-	if err != nil {
-		c.server.logger().Printf(c.sessionID, "fail to start data connection: %v", err)
-		c.WriteReply(StatusTransfertAborted, "Requested file action aborted.")
-		return
-	}
-	cr := &countReader{Reader: conn}
-	reader := io.MultiReader(r, cr)
-
-	go func() {
-		defer r.Close()
 		defer conn.Close()
-		err = c.fileSystem().Create(context.Background(), name, reader)
+
+		chSuccess <- true
+		cr := &countReader{Reader: conn}
+		reader := io.MultiReader(r, cr)
+		err = c.fileSystem().Create(tctx, name, reader)
 		if err != nil {
 			c.server.logger().Printf(c.sessionID, "fail to store file: %v", err)
 			c.WriteReply(StatusActionAborted, "Requested file action aborted.")
@@ -234,7 +242,14 @@ func (commandAppe) Execute(ctx context.Context, c *ServerConn, cmd *Command) {
 		}
 		c.WriteReply(StatusClosingDataConnection, fmt.Sprintf("OK, received %d bytes.", cr.count))
 	}()
-
+	select {
+	case success := <-chSuccess:
+		if !success {
+			cancel()
+		}
+	case <-ctx.Done():
+		cancel()
+	}
 }
 
 // CHANGE TO PARENT DIRECTORY (CDUP)
