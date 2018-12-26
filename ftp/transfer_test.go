@@ -44,8 +44,9 @@ func TestServerConn_newPassiveDataTransfer(t *testing.T) {
 	}
 
 	s := &Server{
-		MinPassivePort: min,
-		MaxPassivePort: max,
+		MinPassivePort:      min,
+		MaxPassivePort:      max,
+		DisableAddressCheck: true,
 	}
 
 	t.Run("connect", func(t *testing.T) {
