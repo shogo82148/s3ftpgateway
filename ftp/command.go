@@ -1153,9 +1153,10 @@ func (commandMdtm) Execute(ctx context.Context, c *ServerConn, cmd *Command) {
 // Listings for Machine Processing (MLST and MLSD)
 type commandMlst struct{}
 
-func (commandMlst) IsExtend() bool     { return true }
-func (commandMlst) RequireParam() bool { return true }
-func (commandMlst) RequireAuth() bool  { return true }
+func (commandMlst) IsExtend() bool       { return true }
+func (commandMlst) RequireParam() bool   { return true }
+func (commandMlst) RequireAuth() bool    { return true }
+func (commandMlst) FeatureParam() string { return "Type*,Modify*,Size*,Perm*" }
 
 func (commandMlst) Execute(ctx context.Context, c *ServerConn, cmd *Command) {
 	path := c.pwd
