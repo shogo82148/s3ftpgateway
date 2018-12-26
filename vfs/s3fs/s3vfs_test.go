@@ -31,6 +31,7 @@ func newTestFileSystem(t *testing.T) (*FileSystem, func()) {
 		t.Error(err)
 		return nil, func() {}
 	}
+	svc := s3.New(cfg)
 
 	var buf [16]byte
 	if _, err := rand.Read(buf[:]); err != nil {
@@ -45,7 +46,31 @@ func newTestFileSystem(t *testing.T) (*FileSystem, func()) {
 		Prefix: prefix,
 	}
 
-	return fs, func() {}
+	chDel := make(chan string, 5)
+	go func() {
+		for key := range chDel {
+			req := svc.DeleteObjectRequest(&s3.DeleteObjectInput{
+				Bucket: aws.String(bucket),
+				Key:    aws.String(key),
+			})
+			req.Send()
+		}
+	}()
+
+	return fs, func() {
+		req := svc.ListObjectsV2Request(&s3.ListObjectsV2Input{
+			Bucket: aws.String(bucket),
+			Prefix: aws.String(prefix + "/"),
+		})
+		pager := req.Paginate()
+		for pager.Next() {
+			resp := pager.CurrentPage()
+			for _, v := range resp.Contents {
+				chDel <- aws.StringValue(v.Key)
+			}
+		}
+		close(chDel)
+	}
 }
 
 func TestKey(t *testing.T) {
