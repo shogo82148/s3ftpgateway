@@ -8,6 +8,7 @@ import (
 	"io/ioutil"
 	"os"
 	"strings"
+	"sync"
 	"testing"
 	"testing/iotest"
 
@@ -31,6 +32,7 @@ func newTestFileSystem(t *testing.T) (*FileSystem, func()) {
 		t.Error(err)
 		return nil, func() {}
 	}
+	svc := s3.New(cfg)
 
 	var buf [16]byte
 	if _, err := rand.Read(buf[:]); err != nil {
@@ -45,7 +47,35 @@ func newTestFileSystem(t *testing.T) (*FileSystem, func()) {
 		Prefix: prefix,
 	}
 
-	return fs, func() {}
+	var wg sync.WaitGroup
+	chDel := make(chan string, 5)
+	wg.Add(1)
+	go func() {
+		for key := range chDel {
+			req := svc.DeleteObjectRequest(&s3.DeleteObjectInput{
+				Bucket: aws.String(bucket),
+				Key:    aws.String(key),
+			})
+			req.Send()
+		}
+		wg.Done()
+	}()
+
+	return fs, func() {
+		req := svc.ListObjectsV2Request(&s3.ListObjectsV2Input{
+			Bucket: aws.String(bucket),
+			Prefix: aws.String(prefix + "/"),
+		})
+		pager := req.Paginate()
+		for pager.Next() {
+			resp := pager.CurrentPage()
+			for _, v := range resp.Contents {
+				chDel <- aws.StringValue(v.Key)
+			}
+		}
+		close(chDel)
+		wg.Wait()
+	}
 }
 
 func TestKey(t *testing.T) {
