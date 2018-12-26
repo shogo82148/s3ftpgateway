@@ -289,7 +289,7 @@ func (fi mapFI) Mode() os.FileMode {
 	if fi.IsDir() {
 		return 0755 | os.ModeDir
 	}
-	return 0666
+	return 0644
 }
 func (fi mapFI) Name() string     { return pathpkg.Base(fi.name) }
 func (fi mapFI) Size() int64      { return int64(fi.size) }

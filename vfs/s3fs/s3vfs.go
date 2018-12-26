@@ -175,7 +175,7 @@ func (obj object) Size() int64 {
 	return aws.Int64Value(obj.obj.Size)
 }
 func (obj object) Mode() os.FileMode {
-	return 0600
+	return 0644
 }
 func (obj object) ModTime() time.Time {
 	return aws.TimeValue(obj.obj.LastModified)

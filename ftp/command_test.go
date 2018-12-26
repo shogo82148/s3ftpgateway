@@ -287,7 +287,7 @@ my $ftp = Net::FTP->new($host, Debug => 1) or die "fail to connect ftp server: $
 ok $ftp->login('anonymous', 'foobar@example.com'), 'login';
 my @files = $ftp->dir();
 is $files[0], 'drwxr-xr-x 1 anonymous anonymous             0  Jan  1 00:00 foo';
-is $files[1], '-r--r--r-- 1 anonymous anonymous             6  Jan  1 00:00 hogehoge.txt';
+is $files[1], '-rw-r--r-- 1 anonymous anonymous             6  Jan  1 00:00 hogehoge.txt';
 ok $ftp->quit();
 done_testing;
 `
