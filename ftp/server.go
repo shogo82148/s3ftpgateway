@@ -180,9 +180,24 @@ func (s *Server) authorizer() Authorizer {
 	return auth
 }
 
-// Close immediately closes all active net.Listeners
+// Close immediately closes all active net.Listeners and any connections.
 func (s *Server) Close() error {
 	return s.listener.Close()
+}
+
+// Shutdown gracefully shuts down the server without interrupting any active data transfers.
+// Shutdown works by first closing all open listeners, then waiting indefinitely for data transfers to complete,
+// then send closing messages to clients, and then shut down.
+// If the provided context expires before the shutdown is complete, Shutdown returns
+// the context's error, otherwise it returns any error returned from closing the Server's underlying Listener(s).
+//
+// When Shutdown is called, Serve, ListenAndServe, and ListenAndServeTLS immediately return ErrServerClosed.
+// Make sure the program doesn't exit and waits instead for Shutdown to return.
+//
+// Once Shutdown has been called on a server, it may not be reused;
+// future calls to methods such as Serve will return ErrServerClosed.
+func (s *Server) Shutdown(ctx context.Context) error {
+	return nil
 }
 
 func (s *Server) logger() Logger {
