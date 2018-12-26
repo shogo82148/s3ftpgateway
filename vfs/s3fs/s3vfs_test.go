@@ -8,6 +8,7 @@ import (
 	"io/ioutil"
 	"os"
 	"strings"
+	"sync"
 	"testing"
 	"testing/iotest"
 
@@ -46,7 +47,9 @@ func newTestFileSystem(t *testing.T) (*FileSystem, func()) {
 		Prefix: prefix,
 	}
 
+	var wg sync.WaitGroup
 	chDel := make(chan string, 5)
+	wg.Add(1)
 	go func() {
 		for key := range chDel {
 			req := svc.DeleteObjectRequest(&s3.DeleteObjectInput{
@@ -55,6 +58,7 @@ func newTestFileSystem(t *testing.T) (*FileSystem, func()) {
 			})
 			req.Send()
 		}
+		wg.Done()
 	}()
 
 	return fs, func() {
@@ -70,6 +74,7 @@ func newTestFileSystem(t *testing.T) (*FileSystem, func()) {
 			}
 		}
 		close(chDel)
+		wg.Wait()
 	}
 }
 
