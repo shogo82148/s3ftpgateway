@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"io"
+	"mime"
 	"net/http"
 	"os"
 	pathpkg "path"
@@ -292,11 +293,18 @@ func (fs *FileSystem) Create(ctx context.Context, name string, body io.Reader) e
 		}
 	}
 
+	ext := pathpkg.Ext(name)
+	typ := mime.TypeByExtension(ext)
+	if typ == "" {
+		typ = "application/octet-stream"
+	}
+
 	svc := fs.uploader()
 	_, err = svc.UploadWithContext(ctx, &s3manager.UploadInput{
-		Bucket: aws.String(fs.Bucket),
-		Key:    aws.String(fs.filekey(name)),
-		Body:   body,
+		Bucket:      aws.String(fs.Bucket),
+		Key:         aws.String(fs.filekey(name)),
+		Body:        body,
+		ContentType: aws.String(typ),
 	})
 	if err != nil {
 		return &os.PathError{

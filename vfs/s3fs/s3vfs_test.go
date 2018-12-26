@@ -329,6 +329,10 @@ func TestCreate(t *testing.T) {
 		if string(ret) != "abc123" {
 			t.Errorf("want abc123, got %s", string(ret))
 		}
+
+		if aws.StringValue(resp.ContentType) != "text/plain; charset=utf-8" {
+			t.Errorf("want text/plain; charset=utf-8, got %s", aws.StringValue(resp.ContentType))
+		}
 	})
 
 	t.Run("timeout", func(t *testing.T) {
