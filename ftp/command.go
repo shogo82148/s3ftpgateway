@@ -140,8 +140,8 @@ var commands = map[string]command{
 	// Extensions to FTP
 	// https://tools.ietf.org/html/rfc3659
 	"MDTM": commandMdtm{},
-	"MLSD": nil,
-	"MLST": nil,
+	"MLSD": commandMlsd{},
+	"MLST": commandMlst{},
 	"REST": nil,
 	"SIZE": commandSize{},
 }
@@ -1141,12 +1141,135 @@ func (commandMdtm) RequireAuth() bool  { return true }
 
 func (commandMdtm) Execute(ctx context.Context, c *ServerConn, cmd *Command) {
 	fs := c.fileSystem()
-	stat, err := fs.Stat(ctx, cmd.Arg)
+	path := c.buildPath(cmd.Arg)
+	stat, err := fs.Stat(ctx, path)
 	if err != nil {
 		handleFileError(c, err)
 		return
 	}
 	c.WriteReply(StatusFile, stat.ModTime().UTC().Format("20060102150405.999"))
+}
+
+// Listings for Machine Processing (MLST and MLSD)
+type commandMlst struct{}
+
+func (commandMlst) IsExtend() bool       { return true }
+func (commandMlst) RequireParam() bool   { return true }
+func (commandMlst) RequireAuth() bool    { return true }
+func (commandMlst) FeatureParam() string { return "Type*,Modify*,Size*,Perm*" }
+
+func (commandMlst) Execute(ctx context.Context, c *ServerConn, cmd *Command) {
+	path := c.pwd
+	if cmd.Arg != "" {
+		path = c.buildPath(cmd.Arg)
+	}
+	stat, err := c.fileSystem().Stat(ctx, path)
+	if err != nil {
+		handleFileError(c, err)
+		return
+	}
+	c.WriteReply(
+		StatusFile,
+		"Listing "+path,
+		formatMachineListings(stat),
+		"End.",
+	)
+}
+
+type commandMlsd struct{}
+
+func (commandMlsd) IsExtend() bool     { return true }
+func (commandMlsd) RequireParam() bool { return true }
+func (commandMlsd) RequireAuth() bool  { return true }
+
+func (commandMlsd) Execute(ctx context.Context, c *ServerConn, cmd *Command) {
+	path := c.pwd
+	if cmd.Arg != "" {
+		path = c.buildPath(cmd.Arg)
+	}
+	info, err := c.fileSystem().ReadDir(ctx, path)
+	if err != nil {
+		handleFileError(c, err)
+		return
+	}
+	c.WriteReply(StatusAboutToSend, "File status okay; about to open data connection.")
+
+	conn, err := c.dt.Conn(ctx)
+	if err != nil {
+		c.server.logger().Printf(c.sessionID, "fail to start data connection: %v", err)
+		c.WriteReply(StatusTransfertAborted, "Requested file action aborted.")
+		return
+	}
+
+	go func() {
+		defer conn.Close()
+		w := bufio.NewWriter(conn)
+		bytes := int64(0)
+		for _, fi := range info {
+			n, _ := fmt.Print(w, formatMachineListings(fi), "\r\n")
+			bytes += int64(n)
+		}
+		if err := w.Flush(); err != nil {
+			c.server.logger().Printf(c.sessionID, "fail to list directory: %v", err)
+			c.WriteReply(StatusActionAborted, "Requested file action aborted.")
+			return
+		}
+		c.WriteReply(StatusClosingDataConnection, fmt.Sprintf("Data transfer starting %d bytes", bytes))
+	}()
+}
+
+func formatMachineListings(stat os.FileInfo) string {
+	var builder strings.Builder
+	if stat.IsDir() {
+		builder.WriteString("Type=dir;")
+	} else {
+		builder.WriteString("Type=file;")
+	}
+
+	builder.WriteString("Modify=")
+	builder.WriteString(stat.ModTime().UTC().Format("20060102150405.999"))
+	builder.WriteString(";")
+
+	fmt.Fprintf(&builder, "Size=%d;", stat.Size())
+
+	builder.WriteString("Perm=")
+	isdir := stat.IsDir()
+	mode := stat.Mode()
+	if !isdir && (mode&0600) == 0600 {
+		builder.WriteRune('a') //  the APPE (append) command may be applied
+	}
+	if isdir && (mode&0200) == 0200 {
+		// files may be created in the directory
+		// the MKD command may be used to create a new directory
+		builder.WriteString("cmp")
+	}
+	if (mode & 0200) == 0200 {
+		// the object named may be deleted
+		// the object named may be renamed
+		builder.WriteString("df")
+	}
+	if isdir && (mode&0100) == 0100 {
+		// that a CWD command naming the object should succeed
+		builder.WriteString("e")
+	}
+	if isdir && (mode&0400) == 0400 {
+		// he listing commands may be applied to the directory
+		builder.WriteString("l")
+	}
+	if !isdir && (mode&0400) == 0400 {
+		// the RETR command may be applied to that object
+		builder.WriteString("r")
+	}
+	if !isdir && (mode&0200) == 0200 {
+		// the STOR command may be applied to that object
+		builder.WriteString("w")
+	}
+	builder.WriteString(";")
+
+	builder.WriteString(" ")
+	builder.WriteString(stat.Name())
+
+	return builder.String()
 }
 
 // commandSize return the file size.
@@ -1158,7 +1281,8 @@ func (commandSize) RequireAuth() bool  { return true }
 
 func (commandSize) Execute(ctx context.Context, c *ServerConn, cmd *Command) {
 	fs := c.fileSystem()
-	stat, err := fs.Stat(ctx, cmd.Arg)
+	path := c.buildPath(cmd.Arg)
+	stat, err := fs.Stat(ctx, path)
 	if err != nil {
 		handleFileError(c, err)
 		return
