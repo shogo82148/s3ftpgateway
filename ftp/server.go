@@ -60,6 +60,10 @@ type Server struct {
 	// because it has some security risk, and most clients use passive mode.
 	EnableActiveMode bool
 
+	// DisableAddressCheck disables checking address of data connection peer.
+	// The checking is enabled by default to avoid the bounce attack.
+	DisableAddressCheck bool
+
 	listener net.Listener
 
 	mu            sync.Mutex

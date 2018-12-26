@@ -219,6 +219,14 @@ func (c *ServerConn) publicIPv4() net.IP {
 	return nil
 }
 
+func (c *ServerConn) remoteIP() net.IP {
+	addr, ok := c.rwc.RemoteAddr().(*net.TCPAddr)
+	if !ok {
+		return nil
+	}
+	return addr.IP
+}
+
 func (c *ServerConn) buildPath(path string) string {
 	if pkgpath.IsAbs(path) {
 		return pkgpath.Clean(path)
