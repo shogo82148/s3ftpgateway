@@ -866,7 +866,16 @@ func (commandSyst) Execute(ctx context.Context, c *ServerConn, cmd *Command) {
 	c.WriteReply(StatusName, "UNIX Type: L8")
 }
 
-// commandType
+// commandType responds to the TYPE FTP command.
+//
+//  like the MODE and STRU commands, TYPE dates back to a time when the FTP
+//  protocol was more aware of the content of the files it was transferring, and
+//  would sometimes be expected to translate things like EOL markers on the fly.
+//
+//  Valid options were A(SCII), I(mage), E(BCDIC) or LN (for local type). Since
+//  we plan to just accept bytes from the client unchanged, I think Image mode is
+//  adequate. The RFC requires we accept ASCII mode however, so accept it, but
+//  ignore it.
 type commandType struct{}
 
 func (commandType) IsExtend() bool     { return false }
@@ -874,8 +883,14 @@ func (commandType) RequireParam() bool { return false }
 func (commandType) RequireAuth() bool  { return true }
 
 func (commandType) Execute(ctx context.Context, c *ServerConn, cmd *Command) {
-	// TODO: Support other types
-	c.WriteReply(StatusCommandOK, "Type set to ASCII")
+	switch cmd.Arg {
+	case "A", "a":
+		c.WriteReply(StatusCommandOK, "Type set to ASCII.")
+	case "I", "i":
+		c.WriteReply(StatusCommandOK, "Type set to binary.")
+	default:
+		c.WriteReply(StatusBadArguments, "Unknown type.")
+	}
 }
 
 // commandUser responds to the USER FTP command by asking for the password
