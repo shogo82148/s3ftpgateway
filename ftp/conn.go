@@ -52,6 +52,9 @@ type ServerConn struct {
 	rmfr       string
 	rmfrReader io.ReadCloser
 
+	// restart position (for REST command).
+	rest int64
+
 	// a connector for data connection
 	dt dataTransfer
 

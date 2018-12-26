@@ -142,7 +142,7 @@ var commands = map[string]command{
 	"MDTM": commandMdtm{},
 	"MLSD": commandMlsd{},
 	"MLST": commandMlst{},
-	"REST": nil,
+	"REST": commandRest{},
 	"SIZE": commandSize{},
 }
 
@@ -1270,6 +1270,23 @@ func formatMachineListings(stat os.FileInfo) string {
 	builder.WriteString(stat.Name())
 
 	return builder.String()
+}
+
+// Restart of Interrupted Transfer (REST)
+type commandRest struct{}
+
+func (commandRest) IsExtend() bool       { return true }
+func (commandRest) RequireParam() bool   { return true }
+func (commandRest) RequireAuth() bool    { return true }
+func (commandRest) FeatureParam() string { return "STREAM" }
+
+func (commandRest) Execute(ctx context.Context, c *ServerConn, cmd *Command) {
+	rest, err := strconv.ParseInt(cmd.Arg, 10, 64)
+	if err != nil {
+		c.WriteReply(StatusBadArguments, "Syntax error.")
+	}
+	c.rest = rest
+	c.WriteReply(StatusRequestFilePending, fmt.Sprintf("Restarting at %d. Send STORE or RETRIEVE", rest))
 }
 
 // commandSize return the file size.
