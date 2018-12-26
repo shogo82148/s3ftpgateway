@@ -600,6 +600,9 @@ func (commandRetr) RequireParam() bool { return true }
 func (commandRetr) RequireAuth() bool  { return true }
 
 func (commandRetr) Execute(ctx context.Context, c *ServerConn, cmd *Command) {
+	rest := c.rest
+	c.rest = 0
+
 	f, err := c.fileSystem().Open(ctx, cmd.Arg)
 	if err != nil {
 		c.server.logger().Printf(c.sessionID, "fail to retrieve file: %v", err)
@@ -618,6 +621,17 @@ func (commandRetr) Execute(ctx context.Context, c *ServerConn, cmd *Command) {
 	go func() {
 		defer f.Close()
 		defer conn.Close()
+
+		// skip first `rest` bytes
+		if rest != 0 {
+			r := io.LimitReader(f, rest)
+			n, _ := io.Copy(ioutil.Discard, r)
+			if n != rest {
+				c.server.logger().Print(c.sessionID, "")
+				c.WriteReply(StatusActionAborted, "Fail to restart; Requested file action aborted.")
+				return
+			}
+		}
 
 		n, err := io.Copy(conn, f)
 		if err != nil {
