@@ -142,7 +142,7 @@ var commands = map[string]command{
 	"MDTM": commandMdtm{},
 	"MLSD": commandMlsd{},
 	"MLST": commandMlst{},
-	"REST": nil,
+	// "REST": nil, // I gave up, see https://github.com/shogo82148/s3ftpgateway/pull/34
 	"SIZE": commandSize{},
 }
 
