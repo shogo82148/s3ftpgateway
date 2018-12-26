@@ -16,7 +16,7 @@ func (l testLogger) Print(sessionID string, message interface{}) {
 
 func (l testLogger) Printf(sessionID string, format string, v ...interface{}) {
 	l.t.Helper()
-	l.t.Log(sessionID, fmt.Sprintf(format, v...))
+	l.t.Log(sessionID, " ", fmt.Sprintf(format, v...))
 }
 
 func (l testLogger) PrintCommand(sessionID string, command string, params string) {
