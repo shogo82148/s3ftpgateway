@@ -3,6 +3,7 @@ package ftp
 import (
 	"context"
 	"crypto/tls"
+	"errors"
 	"net"
 	"strconv"
 	"sync"
@@ -41,6 +42,22 @@ type activeDataTransfer struct {
 }
 
 func (c *ServerConn) newActiveDataTransfer(ctx context.Context, addr string) (*activeDataTransfer, error) {
+	host, _, err := net.SplitHostPort(addr)
+	if err != nil {
+		return nil, err
+	}
+	ip := net.ParseIP(host)
+	if ip == nil {
+		return nil, errors.New("invalid address")
+	}
+
+	if !c.server.DisableAddressCheck {
+		ctrl := c.remoteIP()
+		if ctrl == nil || !ip.Equal(ctrl) {
+			return nil, errors.New("invalid address")
+		}
+	}
+
 	dialer := c.server.dialer()
 	conn, err := dialer.DialContext(ctx, "tcp", addr)
 	if err != nil {
@@ -79,6 +96,7 @@ type passiveDataTransfer struct {
 	ch     <-chan chConn
 	closed chan struct{}
 	s      *Server
+	c      *ServerConn
 
 	mu   sync.Mutex
 	conn net.Conn
@@ -114,6 +132,7 @@ func (c *ServerConn) newPassiveDataTransfer() (*passiveDataTransfer, error) {
 		ch:     ch,
 		closed: make(chan struct{}),
 		s:      c.server,
+		c:      c,
 	}
 	go t.listen(ch)
 
@@ -126,6 +145,7 @@ func (c *ServerConn) newPassiveDataTransfer() (*passiveDataTransfer, error) {
 
 func (t *passiveDataTransfer) listen(ch chan<- chConn) {
 	var tempDelay time.Duration // how long to sleep on accept failure
+	defer t.l.Close()
 	for {
 		rw, err := t.l.Accept()
 		if err != nil {
@@ -143,18 +163,40 @@ func (t *passiveDataTransfer) listen(ch chan<- chConn) {
 			}
 			select {
 			case ch <- chConn{nil, err}:
+				return
 			case <-t.closed:
 				return
 			}
 		}
 		tempDelay = 0
+
+		if !t.validRemote(rw) {
+			continue
+		}
+
 		select {
 		case ch <- chConn{rw, nil}:
+			return
 		case <-t.closed:
 			rw.Close()
 			return
 		}
 	}
+}
+
+func (t *passiveDataTransfer) validRemote(conn net.Conn) bool {
+	if t.s.DisableAddressCheck {
+		return true
+	}
+	ctrl := t.c.remoteIP()
+	if ctrl == nil {
+		return false
+	}
+	data, ok := conn.RemoteAddr().(*net.TCPAddr)
+	if !ok {
+		return false
+	}
+	return data.IP.Equal(ctrl)
 }
 
 type passiveDataTransferConn struct {

@@ -14,6 +14,7 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+	"time"
 )
 
 // Command is a ftp command.
@@ -482,8 +483,13 @@ func (commandPass) RequireParam() bool { return true }
 func (commandPass) RequireAuth() bool  { return false }
 
 func (commandPass) Execute(ctx context.Context, c *ServerConn, cmd *Command) {
-	auth, err := c.server.authorize(ctx, c.user, cmd.Arg)
+	auth, err := c.server.authorizer().Authorize(ctx, c, c.user, cmd.Arg)
 	if err != nil {
+		select {
+		case <-time.After(5 * time.Second):
+		case <-ctx.Done():
+			return
+		}
 		if err == ErrAuthorizeFailed {
 			c.WriteReply(StatusNotLoggedIn, "Not logged in.")
 		}
@@ -530,7 +536,7 @@ func (commandPort) RequireParam() bool { return true }
 func (commandPort) RequireAuth() bool  { return true }
 
 func (commandPort) Execute(ctx context.Context, c *ServerConn, cmd *Command) {
-	if c.epsvAll {
+	if c.epsvAll || !c.server.EnableActiveMode {
 		c.WriteReply(StatusBadArguments, "PORT command is disabled.")
 		return
 	}
@@ -1030,7 +1036,7 @@ func (commandEprt) RequireParam() bool { return true }
 func (commandEprt) RequireAuth() bool  { return true }
 
 func (commandEprt) Execute(ctx context.Context, c *ServerConn, cmd *Command) {
-	if c.epsvAll {
+	if c.epsvAll || !c.server.EnableActiveMode {
 		c.WriteReply(StatusBadArguments, "EPRT command is disabled.")
 		return
 	}

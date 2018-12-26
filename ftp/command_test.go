@@ -429,6 +429,10 @@ ok $dst->stor('testfile');
 ok $src->retr('testfile');
 is $src->response, Net::Cmd::CMD_INFO, 'response';
 ok $dst->pasv_wait($src);
+
+ok !$dst->port(['127.0.0.1', 80]), 'well-known port is denied';
+ok !$dst->port(['192.0.2.3', 8080]), 'another IP address is denied';
+
 ok $src->quit(), 'quit';
 ok $dst->quit(), 'quit';
 done_testing;

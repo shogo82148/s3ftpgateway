@@ -61,6 +61,11 @@ type ServerConn struct {
 	epsvAll bool
 }
 
+// Server returns a ftp server of the connection.
+func (c *ServerConn) Server() *Server {
+	return c.server
+}
+
 func (c *ServerConn) serve(ctx context.Context) {
 	ctx, cancel := context.WithCancel(ctx)
 	defer cancel()
@@ -183,7 +188,14 @@ func (c *ServerConn) upgradeToTLS() error {
 }
 
 func (c *ServerConn) fileSystem() vfs.FileSystem {
-	return c.server.FileSystem
+	fs := c.auth.FileSystem
+	if fs == nil {
+		fs = c.server.FileSystem
+	}
+	if fs == nil {
+		fs = vfs.Null
+	}
+	return fs
 }
 
 func (c *ServerConn) close() error {
@@ -217,6 +229,14 @@ func (c *ServerConn) publicIPv4() net.IP {
 		return addr.IP.To4()
 	}
 	return nil
+}
+
+func (c *ServerConn) remoteIP() net.IP {
+	addr, ok := c.rwc.RemoteAddr().(*net.TCPAddr)
+	if !ok {
+		return nil
+	}
+	return addr.IP
 }
 
 func (c *ServerConn) buildPath(path string) string {
