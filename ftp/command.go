@@ -14,6 +14,7 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+	"time"
 )
 
 // Command is a ftp command.
@@ -482,8 +483,13 @@ func (commandPass) RequireParam() bool { return true }
 func (commandPass) RequireAuth() bool  { return false }
 
 func (commandPass) Execute(ctx context.Context, c *ServerConn, cmd *Command) {
-	auth, err := c.server.authorize(ctx, c.user, cmd.Arg)
+	auth, err := c.server.authorizer().Authorize(ctx, c, c.user, cmd.Arg)
 	if err != nil {
+		select {
+		case <-time.After(5 * time.Second):
+		case <-ctx.Done():
+			return
+		}
 		if err == ErrAuthorizeFailed {
 			c.WriteReply(StatusNotLoggedIn, "Not logged in.")
 		}

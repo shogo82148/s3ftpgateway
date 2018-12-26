@@ -1,6 +1,7 @@
 package ftptest
 
 import (
+	"context"
 	"crypto/tls"
 	"crypto/x509"
 	"flag"
@@ -11,6 +12,19 @@ import (
 	"github.com/shogo82148/s3ftpgateway/ftp/internal"
 	"github.com/shogo82148/s3ftpgateway/vfs"
 )
+
+// Authorizer is a Authorizer for test.
+// It accepts all users.
+var Authorizer ftp.Authorizer = testAuthorizer{}
+
+type testAuthorizer struct{}
+
+func (testAuthorizer) Authorize(ctx context.Context, conn *ftp.ServerConn, user, password string) (*ftp.Authorization, error) {
+	return &ftp.Authorization{
+		User:       user,
+		FileSystem: conn.Server().FileSystem,
+	}, nil
+}
 
 func newLocalListener() net.Listener {
 	if *serve != "" {
@@ -71,6 +85,7 @@ func NewUnstartedServer(vfs vfs.FileSystem) *Server {
 		Config: &ftp.Server{
 			FileSystem:       vfs,
 			EnableActiveMode: true,
+			Authorizer:       Authorizer,
 		},
 	}
 }

@@ -23,10 +23,12 @@ type Server struct {
 	// TCP address for the control connection to listen on, ":ftp" if empty.
 	Addr string
 
-	// Authorize method
+	// Authorizer is an authorize method.
+	// If it is nil, NullAuthorizer is used.
 	Authorizer Authorizer
 
-	// Virtual File System
+	// FileSystem is a virtual file system.
+	// If it nil, vfs.Null is used.
 	FileSystem vfs.FileSystem
 
 	// TLSConfig optionally provides a TLS configuration for use
@@ -170,12 +172,12 @@ func (s *Server) newConn(rwc net.Conn) *ServerConn {
 	return c
 }
 
-func (s *Server) authorize(ctx context.Context, user, passord string) (*Authorization, error) {
+func (s *Server) authorizer() Authorizer {
 	auth := s.Authorizer
 	if auth == nil {
-		auth = AnonymousAuthorizer
+		auth = NullAuthorizer
 	}
-	return auth.Authorize(ctx, user, passord)
+	return auth
 }
 
 // Close immediately closes all active net.Listeners
