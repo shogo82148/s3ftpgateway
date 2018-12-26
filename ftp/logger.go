@@ -23,7 +23,7 @@ func (stdLogger) Print(sessionID string, message interface{}) {
 }
 
 func (stdLogger) Printf(sessionID string, format string, v ...interface{}) {
-	log.Print(sessionID, fmt.Sprintf(format, v...))
+	log.Print(sessionID, " ", fmt.Sprintf(format, v...))
 }
 
 func (stdLogger) PrintCommand(sessionID string, command string, params string) {
