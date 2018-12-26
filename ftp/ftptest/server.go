@@ -69,7 +69,8 @@ func NewUnstartedServer(vfs vfs.FileSystem) *Server {
 	return &Server{
 		Listener: newLocalListener(),
 		Config: &ftp.Server{
-			FileSystem: vfs,
+			FileSystem:       vfs,
+			EnableActiveMode: true,
 		},
 	}
 }

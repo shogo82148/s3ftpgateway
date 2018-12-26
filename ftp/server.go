@@ -55,6 +55,11 @@ type Server struct {
 	// If it is nil, the zero value is used.
 	Dialer *net.Dialer
 
+	// EnableActiveMode enables active transfer mode.
+	// PORT and EPRT commands are disabled by default,
+	// because it has some security risk, and most clients use passive mode.
+	EnableActiveMode bool
+
 	listener net.Listener
 
 	mu            sync.Mutex

@@ -530,7 +530,7 @@ func (commandPort) RequireParam() bool { return true }
 func (commandPort) RequireAuth() bool  { return true }
 
 func (commandPort) Execute(ctx context.Context, c *ServerConn, cmd *Command) {
-	if c.epsvAll {
+	if c.epsvAll || !c.server.EnableActiveMode {
 		c.WriteReply(StatusBadArguments, "PORT command is disabled.")
 		return
 	}
@@ -1030,7 +1030,7 @@ func (commandEprt) RequireParam() bool { return true }
 func (commandEprt) RequireAuth() bool  { return true }
 
 func (commandEprt) Execute(ctx context.Context, c *ServerConn, cmd *Command) {
-	if c.epsvAll {
+	if c.epsvAll || !c.server.EnableActiveMode {
 		c.WriteReply(StatusBadArguments, "EPRT command is disabled.")
 		return
 	}
