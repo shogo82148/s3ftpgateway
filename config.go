@@ -8,8 +8,17 @@ import (
 
 // Config is a configure of s3ftpgateway.
 type Config struct {
-	Bucket string `yaml:"bucket"`
-	Prefix string `yaml:"prefix"`
+	Bucket   string          `yaml:"bucket"`
+	Prefix   string          `yaml:"prefix"`
+	Listenrs []ListenrConfig `yaml:"listeners"`
+}
+
+// ListenrConfig is a configure of listener.
+type ListenrConfig struct {
+	Address string `yaml:"address"`
+
+	// TODO: TLS support
+	// TLS     bool   `yaml:"tls"`
 }
 
 // LoadConfig loads a configure file.
