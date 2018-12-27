@@ -132,7 +132,13 @@ func (s *Server) Serve(l net.Listener) error {
 // ServeTLS accepts incoming connections on the Listener l, creating a
 // new service goroutine for each.
 func (s *Server) ServeTLS(l net.Listener, certFile, keyFile string) error {
-	config := s.TLSConfig.Clone()
+	var config *tls.Config
+	if s.TLSConfig != nil {
+		config = s.TLSConfig.Clone()
+	} else {
+		config = &tls.Config{}
+	}
+
 	if !strSliceContains(config.NextProtos, "ftp") {
 		config.NextProtos = append(config.NextProtos, "ftp")
 	}
