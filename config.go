@@ -15,10 +15,19 @@ type Config struct {
 
 // ListenrConfig is a configure of listener.
 type ListenrConfig struct {
+	// Address is used for listening ftp control connections.
 	Address string `yaml:"address"`
 
-	// TODO: TLS support
-	// TLS     bool   `yaml:"tls"`
+	// TLS enables implicit tls mode.
+	TLS bool `yaml:"tls"`
+
+	// Certificate is a file path for certificate public key.
+	// The file must contain PEM encoded data.
+	Certificate string `yaml:"certificate"`
+
+	// CertificateKey is a file path for certificate private key.
+	// The file must contain PEM encoded data.
+	CertificateKey string `yaml:"certificate_key"`
 }
 
 // LoadConfig loads a configure file.

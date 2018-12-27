@@ -40,19 +40,32 @@ func Serve(config *Config) {
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
-			if err := s.Serve(l); err != nil {
-				log.Fatal(err)
+			if l.tls {
+				if err := s.ServeTLS(l.listener, l.certFile, l.keyFile); err != nil {
+					log.Fatal(err)
+				}
+			} else {
+				if err := s.Serve(l.listener); err != nil {
+					log.Fatal(err)
+				}
 			}
 		}()
 	}
 	wg.Wait()
 }
 
-func listeners(config *Config) (ls []net.Listener, err error) {
+type listenerConfig struct {
+	listener net.Listener
+	tls      bool
+	certFile string
+	keyFile  string
+}
+
+func listeners(config *Config) (ls []listenerConfig, err error) {
 	defer func() {
 		if err != nil {
 			for _, l := range ls {
-				l.Close()
+				l.listener.Close()
 			}
 		}
 	}()
@@ -63,7 +76,14 @@ func listeners(config *Config) (ls []net.Listener, err error) {
 		if err != nil {
 			return
 		}
-		ls = append(ls, newTCPKeepAliveListener(l))
+		l = newTCPKeepAliveListener(l)
+
+		ls = append(ls, listenerConfig{
+			listener: l,
+			tls:      listener.TLS,
+			certFile: listener.Certificate,
+			keyFile:  listener.CertificateKey,
+		})
 	}
 	return
 }
