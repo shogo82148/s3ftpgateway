@@ -122,7 +122,7 @@ func (c *ServerConn) newPassiveDataTransfer() (*passiveDataTransfer, error) {
 	}
 	l = tcpKeepAliveListener{l.(*net.TCPListener)}
 	if c.tls {
-		l = tls.NewListener(l, c.server.TLSConfig)
+		l = tls.NewListener(l, c.tlsCfg())
 	}
 
 	ch := make(chan chConn)

@@ -119,6 +119,10 @@ func (s *Server) ListenAndServeTLS(certFile, keyFile string) error {
 
 // Serve accepts incoming connections on the Listener l, creating a new service goroutine for each.
 func (s *Server) Serve(l net.Listener) error {
+	return s.serve(l, nil)
+}
+
+func (s *Server) serve(l net.Listener, tlsConfig *tls.Config) error {
 	ctx := context.Background()
 	var tempDelay time.Duration // how long to sleep on accept failure
 	for {
@@ -139,7 +143,7 @@ func (s *Server) Serve(l net.Listener) error {
 			return err
 		}
 		tempDelay = 0
-		c := s.newConn(rw)
+		c := s.newConn(rw, tlsConfig)
 		go c.serve(ctx)
 	}
 }
@@ -167,7 +171,7 @@ func (s *Server) ServeExplicitTLS(l net.Listener, certFile, keyFile string) erro
 		}
 	}
 
-	return s.Serve(l)
+	return s.serve(l, config)
 }
 
 // ServeTLS accepts incoming connections on the Listener l, creating a
@@ -195,10 +199,10 @@ func (s *Server) ServeTLS(l net.Listener, certFile, keyFile string) error {
 	}
 
 	tlsListener := tls.NewListener(l, config)
-	return s.Serve(tlsListener)
+	return s.serve(tlsListener, config)
 }
 
-func (s *Server) newConn(rwc net.Conn) *ServerConn {
+func (s *Server) newConn(rwc net.Conn, tlsConfig *tls.Config) *ServerConn {
 	var sessionID string
 	var buf [4]byte
 	if _, err := io.ReadFull(rand.Reader, buf[:]); err != nil {
@@ -209,6 +213,7 @@ func (s *Server) newConn(rwc net.Conn) *ServerConn {
 
 	c := &ServerConn{
 		server:    s,
+		tlsConfig: tlsConfig,
 		sessionID: sessionID,
 		rwc:       rwc,
 		dt:        defaultDataTransfer{},
