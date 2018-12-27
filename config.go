@@ -11,6 +11,10 @@ type Config struct {
 	Bucket   string          `yaml:"bucket"`
 	Prefix   string          `yaml:"prefix"`
 	Listenrs []ListenrConfig `yaml:"listeners"`
+
+	// a port range for passive mode.
+	MinPort int `yaml:"min_port"`
+	MaxPort int `yaml:"max_port"`
 }
 
 // ListenrConfig is a configure of listener.

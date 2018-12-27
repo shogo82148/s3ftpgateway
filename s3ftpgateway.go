@@ -30,8 +30,10 @@ func Serve(config *Config) {
 	}
 
 	s := &ftp.Server{
-		FileSystem: fs,
-		Authorizer: authorizer{},
+		FileSystem:     fs,
+		Authorizer:     authorizer{},
+		MinPassivePort: config.MinPort,
+		MaxPassivePort: config.MaxPort,
 	}
 
 	var wg sync.WaitGroup
