@@ -76,8 +76,16 @@ func listeners(config *Config) (ls []listenerConfig, err error) {
 	}()
 
 	for _, listener := range config.Listenrs {
+		addr := listener.Address
+		if addr == "" {
+			if listener.TLS {
+				addr = ":ftps"
+			} else {
+				addr = ":ftp"
+			}
+		}
 		var l net.Listener
-		l, err = net.Listen("tcp", listener.Address)
+		l, err = net.Listen("tcp", addr)
 		if err != nil {
 			return
 		}
