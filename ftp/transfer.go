@@ -63,6 +63,9 @@ func (c *ServerConn) newActiveDataTransfer(ctx context.Context, addr string) (*a
 	if err != nil {
 		return nil, err
 	}
+	if c.tls {
+		conn = tls.Server(conn, c.tlsCfg())
+	}
 	t := &activeDataTransfer{
 		conn: conn,
 	}
