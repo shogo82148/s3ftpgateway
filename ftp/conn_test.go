@@ -12,7 +12,7 @@ func TestWriteReply(t *testing.T) {
 		s := &Server{
 			Logger: testLogger{t},
 		}
-		c := s.newConn(server)
+		c := s.newConn(server, nil)
 		go func() {
 			c.WriteReply(200)
 			server.Close()
@@ -32,7 +32,7 @@ func TestWriteReply(t *testing.T) {
 		s := &Server{
 			Logger: testLogger{t},
 		}
-		c := s.newConn(server)
+		c := s.newConn(server, nil)
 		go func() {
 			c.WriteReply(200, "Okay.")
 			server.Close()
@@ -52,7 +52,7 @@ func TestWriteReply(t *testing.T) {
 		s := &Server{
 			Logger: testLogger{t},
 		}
-		c := s.newConn(server)
+		c := s.newConn(server, nil)
 		go func() {
 			c.WriteReply(200, "First line.", "Second line.", "Last line.")
 			server.Close()

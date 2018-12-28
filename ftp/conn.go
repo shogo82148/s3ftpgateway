@@ -28,6 +28,7 @@ const (
 // ServerConn is a connection of the ftp server.
 type ServerConn struct {
 	server    *Server
+	tlsConfig *tls.Config
 	sessionID string
 
 	// connection for control
@@ -64,6 +65,16 @@ type ServerConn struct {
 // Server returns a ftp server of the connection.
 func (c *ServerConn) Server() *Server {
 	return c.server
+}
+
+func (c *ServerConn) tlsCfg() *tls.Config {
+	if c.tlsConfig != nil {
+		return c.tlsConfig
+	}
+	if c.server.TLSConfig != nil {
+		return c.server.TLSConfig
+	}
+	return &tls.Config{}
 }
 
 func (c *ServerConn) serve(ctx context.Context) {

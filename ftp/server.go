@@ -87,7 +87,22 @@ func (s *Server) ListenAndServe() error {
 	return s.Serve(tcpKeepAliveListener{ln.(*net.TCPListener)})
 }
 
-// ListenAndServeTLS listens on the TCP network address srv.Addr and
+// ListenAndServeExplicitTLS listens on the TCP network address s.Addr and
+// then calls ServeExplicitTLS to handle requests on incoming connections.
+func (s *Server) ListenAndServeExplicitTLS(certFile, keyFile string) error {
+	addr := s.Addr
+	if addr == "" {
+		addr = ":ftp"
+	}
+	ln, err := net.Listen("tcp", addr)
+	if err != nil {
+		return err
+	}
+	defer ln.Close()
+	return s.ServeExplicitTLS(tcpKeepAliveListener{ln.(*net.TCPListener)}, certFile, keyFile)
+}
+
+// ListenAndServeTLS listens on the TCP network address s.Addr and
 // then calls ServeTLS to handle requests on incoming TLS connections.
 func (s *Server) ListenAndServeTLS(certFile, keyFile string) error {
 	addr := s.Addr
@@ -104,6 +119,10 @@ func (s *Server) ListenAndServeTLS(certFile, keyFile string) error {
 
 // Serve accepts incoming connections on the Listener l, creating a new service goroutine for each.
 func (s *Server) Serve(l net.Listener) error {
+	return s.serve(l, nil)
+}
+
+func (s *Server) serve(l net.Listener, tlsConfig *tls.Config) error {
 	ctx := context.Background()
 	var tempDelay time.Duration // how long to sleep on accept failure
 	for {
@@ -124,13 +143,40 @@ func (s *Server) Serve(l net.Listener) error {
 			return err
 		}
 		tempDelay = 0
-		c := s.newConn(rw)
+		c := s.newConn(rw, tlsConfig)
 		go c.serve(ctx)
 	}
 }
 
+// ServeExplicitTLS accepts incoming connections on the Listener l, creating a
+// new service goroutine for each.
+// The service goroutines handle FTP commands.
+// An FTPS client must "explicitly request" security from the server
+// and then step up to a mutually agreed encryption method.
+func (s *Server) ServeExplicitTLS(l net.Listener, certFile, keyFile string) error {
+	var config *tls.Config
+	if s.TLSConfig != nil {
+		config = s.TLSConfig.Clone()
+	} else {
+		config = &tls.Config{}
+	}
+
+	configHasCert := len(config.Certificates) > 0 || config.GetCertificate != nil
+	if !configHasCert || certFile != "" || keyFile != "" {
+		var err error
+		config.Certificates = make([]tls.Certificate, 1)
+		config.Certificates[0], err = tls.LoadX509KeyPair(certFile, keyFile)
+		if err != nil {
+			return err
+		}
+	}
+
+	return s.serve(l, config)
+}
+
 // ServeTLS accepts incoming connections on the Listener l, creating a
 // new service goroutine for each.
+// The service goroutines perform TLS setup and then handle FTP commands.
 func (s *Server) ServeTLS(l net.Listener, certFile, keyFile string) error {
 	var config *tls.Config
 	if s.TLSConfig != nil {
@@ -153,10 +199,10 @@ func (s *Server) ServeTLS(l net.Listener, certFile, keyFile string) error {
 	}
 
 	tlsListener := tls.NewListener(l, config)
-	return s.Serve(tlsListener)
+	return s.serve(tlsListener, config)
 }
 
-func (s *Server) newConn(rwc net.Conn) *ServerConn {
+func (s *Server) newConn(rwc net.Conn, tlsConfig *tls.Config) *ServerConn {
 	var sessionID string
 	var buf [4]byte
 	if _, err := io.ReadFull(rand.Reader, buf[:]); err != nil {
@@ -167,6 +213,7 @@ func (s *Server) newConn(rwc net.Conn) *ServerConn {
 
 	c := &ServerConn{
 		server:    s,
+		tlsConfig: tlsConfig,
 		sessionID: sessionID,
 		rwc:       rwc,
 		dt:        defaultDataTransfer{},
