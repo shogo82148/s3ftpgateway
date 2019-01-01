@@ -52,10 +52,12 @@ func Serve(config *Config) {
 		go func() {
 			defer wg.Done()
 			if l.tls {
+				logrus.WithField("address", l.listener.Addr().String()).Info("start to listen in tls mode")
 				if err := s.ServeTLS(l.listener, l.certFile, l.keyFile); err != nil {
 					logrus.WithError(err).Fatal("fail to serve")
 				}
 			} else {
+				logrus.WithField("address", l.listener.Addr().String()).Info("start to listen")
 				if err := s.Serve(l.listener); err != nil {
 					logrus.WithError(err).Fatal("fail to serve")
 				}
