@@ -1,7 +1,6 @@
 package main
 
 import (
-	"log"
 	"net"
 	"sync"
 	"time"
@@ -9,18 +8,19 @@ import (
 	"github.com/aws/aws-sdk-go-v2/aws/external"
 	"github.com/shogo82148/s3ftpgateway/ftp"
 	"github.com/shogo82148/s3ftpgateway/vfs/s3fs"
+	"github.com/sirupsen/logrus"
 )
 
 // Serve serves s3ftpgateway service.
 func Serve(config *Config) {
 	ls, err := listeners(config)
 	if err != nil {
-		log.Fatal(err)
+		logrus.WithError(err).Fatal("fail to listen")
 	}
 
 	cfg, err := external.LoadDefaultAWSConfig()
 	if err != nil {
-		log.Fatal(err)
+		logrus.WithError(err).Fatal("fail to get AWS config")
 	}
 
 	fs := &s3fs.FileSystem{
@@ -31,7 +31,7 @@ func Serve(config *Config) {
 
 	auth, err := NewAuhtorizer(config.Authorizer)
 	if err != nil {
-		log.Fatal(err)
+		logrus.WithError(err).Fatal("fail to parse s3ftpgateway config")
 	}
 
 	s := &ftp.Server{
@@ -52,11 +52,11 @@ func Serve(config *Config) {
 			defer wg.Done()
 			if l.tls {
 				if err := s.ServeTLS(l.listener, l.certFile, l.keyFile); err != nil {
-					log.Fatal(err)
+					logrus.WithError(err).Fatal("fail to serve")
 				}
 			} else {
 				if err := s.Serve(l.listener); err != nil {
-					log.Fatal(err)
+					logrus.WithError(err).Fatal("fail to serve")
 				}
 			}
 		}()
