@@ -42,6 +42,7 @@ func Serve(config *Config) {
 		PublicIPs:           config.PublicIPs,
 		EnableActiveMode:    config.EnableActiveMode,
 		DisableAddressCheck: !config.EnableAddressCheck,
+		Logger:              logger{},
 	}
 
 	var wg sync.WaitGroup
