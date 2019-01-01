@@ -12,6 +12,8 @@ type Config struct {
 	Prefix   string          `yaml:"prefix"`
 	Listenrs []ListenrConfig `yaml:"listeners"`
 
+	Authorizer AuthorizerConfig `yaml:"authorizer"`
+
 	// MinPassivePort is minimum port number for passive data connections.
 	// If MinPassivePort is more than MaxPassivePort, passive more is disabled.
 	MinPassivePort int `yaml:"min_passive_port"`
@@ -48,6 +50,12 @@ type ListenrConfig struct {
 	// CertificateKey is a file path for certificate private key.
 	// The file must contain PEM encoded data.
 	CertificateKey string `yaml:"certificate_key"`
+}
+
+// AuthorizerConfig is
+type AuthorizerConfig struct {
+	Method string                 `yaml:"method"`
+	Config map[string]interface{} `yaml:"config"`
 }
 
 // LoadConfig loads a configure file.

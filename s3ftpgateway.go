@@ -29,9 +29,14 @@ func Serve(config *Config) {
 		Prefix: config.Prefix,
 	}
 
+	auth, err := NewAuhtorizer(config.Authorizer)
+	if err != nil {
+		log.Fatal(err)
+	}
+
 	s := &ftp.Server{
 		FileSystem:          fs,
-		Authorizer:          authorizer{},
+		Authorizer:          auth,
 		MinPassivePort:      config.MinPassivePort,
 		MaxPassivePort:      config.MaxPassivePort,
 		PublicIPs:           config.PublicIPs,
