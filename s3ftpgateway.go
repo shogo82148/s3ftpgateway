@@ -13,6 +13,15 @@ import (
 
 // Serve serves s3ftpgateway service.
 func Serve(config *Config) {
+	switch config.Log.Format {
+	case "", "text":
+		logrus.SetFormatter(&logrus.TextFormatter{})
+	case "json":
+		logrus.SetFormatter(&logrus.JSONFormatter{})
+	default:
+		logrus.Fatalf("unknown log format: %s", config.Log.Format)
+	}
+
 	ls, err := listeners(config)
 	if err != nil {
 		logrus.WithError(err).Fatal("fail to listen")

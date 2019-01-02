@@ -12,6 +12,8 @@ type Config struct {
 	Prefix   string          `yaml:"prefix"`
 	Listenrs []ListenrConfig `yaml:"listeners"`
 
+	Log LogConfig `yaml:"log"`
+
 	Authorizer AuthorizerConfig `yaml:"authorizer"`
 
 	// MinPassivePort is minimum port number for passive data connections.
@@ -52,7 +54,14 @@ type ListenrConfig struct {
 	CertificateKey string `yaml:"certificate_key"`
 }
 
-// AuthorizerConfig is
+// LogConfig is the config for log.
+type LogConfig struct {
+	// Format is the format of the log.
+	// "json" or "text" are valid.
+	Format string `yaml:"format"`
+}
+
+// AuthorizerConfig is config for authorize.
 type AuthorizerConfig struct {
 	Method string                 `yaml:"method"`
 	Config map[string]interface{} `yaml:"config"`
