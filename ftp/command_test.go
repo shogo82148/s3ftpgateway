@@ -513,11 +513,12 @@ func TestRmd(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 
-	ts := ftptest.NewServer(mapfs.New(map[string]string{
+	ts := ftptest.NewUnstartedServer(mapfs.New(map[string]string{
 		"foo/bar/": "",
 	}))
-	defer ts.Close()
 	ts.Config.Logger = testLogger{t}
+	ts.Start()
+	defer ts.Close()
 
 	u, err := url.Parse(ts.URL)
 	if err != nil {
@@ -554,11 +555,12 @@ func TestRename(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 
-	ts := ftptest.NewServer(mapfs.New(map[string]string{
+	ts := ftptest.NewUnstartedServer(mapfs.New(map[string]string{
 		"foo.txt": "hello",
 	}))
-	defer ts.Close()
+	ts.Start()
 	ts.Config.Logger = testLogger{t}
+	defer ts.Close()
 
 	u, err := url.Parse(ts.URL)
 	if err != nil {
@@ -597,11 +599,12 @@ func TestStat(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 
-	ts := ftptest.NewServer(mapfs.New(map[string]string{
+	ts := ftptest.NewUnstartedServer(mapfs.New(map[string]string{
 		"foo.txt": "hello",
 	}))
-	defer ts.Close()
 	ts.Config.Logger = testLogger{t}
+	ts.Start()
+	defer ts.Close()
 
 	u, err := url.Parse(ts.URL)
 	if err != nil {
@@ -645,9 +648,10 @@ func TestStor(t *testing.T) {
 	defer cancel()
 
 	fs := mapfs.New(map[string]string{})
-	ts := ftptest.NewServer(fs)
-	defer ts.Close()
+	ts := ftptest.NewUnstartedServer(fs)
 	ts.Config.Logger = testLogger{t}
+	ts.Start()
+	defer ts.Close()
 
 	u, err := url.Parse(ts.URL)
 	if err != nil {
@@ -694,9 +698,10 @@ func TestStou(t *testing.T) {
 	defer cancel()
 
 	fs := mapfs.New(map[string]string{})
-	ts := ftptest.NewServer(fs)
-	defer ts.Close()
+	ts := ftptest.NewUnstartedServer(fs)
 	ts.Config.Logger = testLogger{t}
+	ts.Start()
+	defer ts.Close()
 
 	u, err := url.Parse(ts.URL)
 	if err != nil {
@@ -755,9 +760,10 @@ func TestFeat(t *testing.T) {
 	defer cancel()
 
 	fs := mapfs.New(map[string]string{})
-	ts := ftptest.NewServer(fs)
-	defer ts.Close()
+	ts := ftptest.NewUnstartedServer(fs)
 	ts.Config.Logger = testLogger{t}
+	ts.Start()
+	defer ts.Close()
 
 	u, err := url.Parse(ts.URL)
 	if err != nil {
@@ -794,11 +800,12 @@ func TestEprt(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 
-	ts := ftptest.NewServer(mapfs.New(map[string]string{
+	ts := ftptest.NewUnstartedServer(mapfs.New(map[string]string{
 		"testfile": "Hello ftp!",
 	}))
-	defer ts.Close()
 	ts.Config.Logger = testLogger{t}
+	ts.Start()
+	defer ts.Close()
 
 	u, err := url.Parse(ts.URL)
 	if err != nil {
@@ -838,9 +845,10 @@ func TestLang(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 
-	ts := ftptest.NewServer(mapfs.New(map[string]string{}))
-	defer ts.Close()
+	ts := ftptest.NewUnstartedServer(mapfs.New(map[string]string{}))
 	ts.Config.Logger = testLogger{t}
+	ts.Start()
+	defer ts.Close()
 
 	u, err := url.Parse(ts.URL)
 	if err != nil {
@@ -873,11 +881,12 @@ func TestMdtm(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 
-	ts := ftptest.NewServer(mapfs.New(map[string]string{
+	ts := ftptest.NewUnstartedServer(mapfs.New(map[string]string{
 		"foobar.txt": "hello",
 	}))
-	defer ts.Close()
 	ts.Config.Logger = testLogger{t}
+	ts.Start()
+	defer ts.Close()
 
 	u, err := url.Parse(ts.URL)
 	if err != nil {
