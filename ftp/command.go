@@ -1264,7 +1264,7 @@ func (commandMlst) Execute(ctx context.Context, c *ServerConn, cmd *Command) {
 type commandMlsd struct{}
 
 func (commandMlsd) IsExtend() bool     { return true }
-func (commandMlsd) RequireParam() bool { return true }
+func (commandMlsd) RequireParam() bool { return false }
 func (commandMlsd) RequireAuth() bool  { return true }
 
 func (commandMlsd) Execute(ctx context.Context, c *ServerConn, cmd *Command) {
