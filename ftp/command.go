@@ -507,8 +507,10 @@ func (commandPass) Execute(ctx context.Context, c *ServerConn, cmd *Command) {
 		}
 		if err == ErrAuthorizeFailed {
 			c.WriteReply(StatusNotLoggedIn, "Not logged in.")
+			return
 		}
 		c.WriteReply(StatusBadCommand, "Internal error.")
+		return
 	}
 	c.auth = auth
 	c.pwd = "/"
