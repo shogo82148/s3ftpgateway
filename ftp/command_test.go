@@ -115,9 +115,10 @@ func TestAppe(t *testing.T) {
 	fs := mapfs.New(map[string]string{
 		"foobar.txt": "Hello",
 	})
-	ts := ftptest.NewServer(fs)
-	defer ts.Close()
+	ts := ftptest.NewUnstartedServer(fs)
 	ts.Config.Logger = testLogger{t}
+	ts.Start()
+	defer ts.Close()
 
 	u, err := url.Parse(ts.URL)
 	if err != nil {
