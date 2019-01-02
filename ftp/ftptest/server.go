@@ -15,6 +15,7 @@ import (
 
 // Authorizer is a Authorizer for test.
 // It accepts all users.
+// DO NOT USE in the production.
 var Authorizer ftp.Authorizer = testAuthorizer{}
 
 type testAuthorizer struct{}

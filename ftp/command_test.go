@@ -13,6 +13,7 @@ import (
 	"time"
 
 	tap "github.com/shogo82148/go-tap"
+	"github.com/shogo82148/s3ftpgateway/ftp"
 	"github.com/shogo82148/s3ftpgateway/ftp/ftptest"
 	"github.com/shogo82148/s3ftpgateway/vfs/mapfs"
 )
@@ -193,6 +194,103 @@ ok $ftp->login('anonymous', 'foobar@example.com'), 'login';
 ok $ftp->rmdir('foobar.txt'), 'remove a file';
 ok !$ftp->rmdir('foobar.txt'), 'file not found';
 ok $ftp->quit;
+
+done_testing;
+`
+
+	perl.Prove(ctx, t, script, u.Host)
+}
+
+// testAuthorizer accepts the user whose password is same as user's name.
+// DO NOT USE in the production.
+type testAuthorizer struct{}
+
+func (testAuthorizer) Authorize(ctx context.Context, conn *ftp.ServerConn, user, password string) (*ftp.Authorization, error) {
+	if user != password {
+		return nil, ftp.ErrAuthorizeFailed
+	}
+	return &ftp.Authorization{
+		User:       user,
+		FileSystem: conn.Server().FileSystem,
+	}, nil
+}
+
+func TestPass(t *testing.T) {
+	perl, err := newPerlExecutor()
+	if err != nil {
+		t.Skipf("perl is required for this test: %v", err)
+		return
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+
+	ts := ftptest.NewUnstartedServer(mapfs.New(map[string]string{}))
+	ts.Config.Logger = testLogger{t}
+	ts.Config.Authorizer = testAuthorizer{}
+	ts.Start()
+	defer ts.Close()
+
+	u, err := url.Parse(ts.URL)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	script := `use utf8;
+use strict;
+use warnings;
+use Test::More;
+use Net::FTP;
+use Time::HiRes qw(gettimeofday tv_interval);
+
+sub elapsed(&) {
+	my $func = shift;
+	my $t0 = [gettimeofday];
+	$func->();
+	return tv_interval($t0);
+}
+
+my $host = shift;
+
+subtest 'anonymous' => sub {
+	my $ftp = Net::FTP->new($host, Debug => 1) or die "fail to connect ftp server: $@";
+	my $elapsed = elapsed {
+		ok !$ftp->login('anonymous', 'foobar@example.com'), 'anonymous user is disable in this server';
+	};
+	cmp_ok $elapsed, '<', 2, 'no sleep';
+
+	$elapsed = elapsed {
+		ok !$ftp->login('anonymous', 'foobar@example.com'), 'anonymous user is disable in this server';
+	};
+	cmp_ok $elapsed, '>', 2, 'sleep a little for protecting from Brute-force attack';
+
+	$elapsed = elapsed {
+		ok $ftp->login('valid-user', 'valid-user'), 'login succeed';
+	};
+	cmp_ok $elapsed, '<', 2, 'no sleep for valid users';
+
+	ok $ftp->quit(), 'quit';
+};
+
+subtest 'proctect from Brute-force attack' => sub {
+	my $ftp = Net::FTP->new($host, Debug => 1) or die "fail to connect ftp server: $@";
+	my $elapsed = elapsed {
+		ok !$ftp->login('attacker', 'invalid password'), 'login failed';
+	};
+	cmp_ok $elapsed, '>', 2, 'sleep a little for protecting from Brute-force attack';
+
+	$elapsed = elapsed {
+		ok !$ftp->login('anonymous', 'foobar@example.com'), 'anonymous user is disable in this server';
+	};
+	cmp_ok $elapsed, '>', 2, 'sleep a little for protecting from Brute-force attack';
+
+	$elapsed = elapsed {
+		ok $ftp->login('valid-user', 'valid-user'), 'login succeed';
+	};
+	cmp_ok $elapsed, '<', 2, 'no sleep for valid users';
+
+	ok $ftp->quit(), 'quit';
+};
 
 done_testing;
 `
