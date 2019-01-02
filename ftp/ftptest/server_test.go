@@ -20,11 +20,12 @@ func TestServer_EPSV(t *testing.T) {
 		return
 	}
 
-	ts := NewServer(mapfs.New(map[string]string{
+	ts := NewUnstartedServer(mapfs.New(map[string]string{
 		"testfile": "Hello ftp!",
 	}))
-	defer ts.Close()
 	ts.Config.Logger = testLogger{t}
+	ts.Start()
+	defer ts.Close()
 
 	var stdout, stderr bytes.Buffer
 	cmd := exec.Command(curl, "-s", "-v", "--ftp-pasv", ts.URL+"/testfile")
@@ -47,11 +48,12 @@ func TestServer_PASV(t *testing.T) {
 		return
 	}
 
-	ts := NewServer(mapfs.New(map[string]string{
+	ts := NewUnstartedServer(mapfs.New(map[string]string{
 		"testfile": "Hello ftp!",
 	}))
-	defer ts.Close()
 	ts.Config.Logger = testLogger{t}
+	ts.Start()
+	defer ts.Close()
 
 	var stdout, stderr bytes.Buffer
 	cmd := exec.Command(curl, "-s", "-v", "--ftp-pasv", "--no-epsv", ts.URL+"/testfile")
@@ -74,11 +76,12 @@ func TestServer_EPRT(t *testing.T) {
 		return
 	}
 
-	ts := NewServer(mapfs.New(map[string]string{
+	ts := NewUnstartedServer(mapfs.New(map[string]string{
 		"testfile": "Hello ftp!",
 	}))
-	defer ts.Close()
 	ts.Config.Logger = testLogger{t}
+	ts.Start()
+	defer ts.Close()
 
 	var stdout, stderr bytes.Buffer
 	cmd := exec.Command(curl, "-s", "-v", "--ftp-port", "-", ts.URL+"/testfile")
@@ -101,11 +104,12 @@ func TestServer_PORT(t *testing.T) {
 		return
 	}
 
-	ts := NewServer(mapfs.New(map[string]string{
+	ts := NewUnstartedServer(mapfs.New(map[string]string{
 		"testfile": "Hello ftp!",
 	}))
-	defer ts.Close()
 	ts.Config.Logger = testLogger{t}
+	ts.Start()
+	defer ts.Close()
 
 	var stdout, stderr bytes.Buffer
 	cmd := exec.Command(curl, "-s", "-v", "--ftp-port", "-", "--no-eprt", ts.URL+"/testfile")
@@ -128,11 +132,12 @@ func TestServer_ExplicitTLS_EPSV(t *testing.T) {
 		return
 	}
 
-	ts := NewServer(mapfs.New(map[string]string{
+	ts := NewUnstartedServer(mapfs.New(map[string]string{
 		"testfile": "Hello ftp!",
 	}))
-	defer ts.Close()
 	ts.Config.Logger = testLogger{t}
+	ts.Start()
+	defer ts.Close()
 
 	dir, err := ioutil.TempDir("", "ftp-")
 	if err != nil {
@@ -173,11 +178,12 @@ func TestServer_ExplicitTLS_EPRT(t *testing.T) {
 		return
 	}
 
-	ts := NewServer(mapfs.New(map[string]string{
+	ts := NewUnstartedServer(mapfs.New(map[string]string{
 		"testfile": "Hello ftp!",
 	}))
-	defer ts.Close()
 	ts.Config.Logger = testLogger{t}
+	ts.Start()
+	defer ts.Close()
 
 	dir, err := ioutil.TempDir("", "ftp-")
 	if err != nil {
@@ -218,11 +224,12 @@ func TestServer_ImplictTLS_EPSV(t *testing.T) {
 		return
 	}
 
-	ts := NewServer(mapfs.New(map[string]string{
+	ts := NewUnstartedServer(mapfs.New(map[string]string{
 		"testfile": "Hello ftp!",
 	}))
-	defer ts.Close()
 	ts.Config.Logger = testLogger{t}
+	ts.StartTLS()
+	defer ts.Close()
 
 	dir, err := ioutil.TempDir("", "ftp-")
 	if err != nil {
@@ -263,11 +270,12 @@ func TestServer_ImplictTLS_EPRT(t *testing.T) {
 		return
 	}
 
-	ts := NewServer(mapfs.New(map[string]string{
+	ts := NewUnstartedServer(mapfs.New(map[string]string{
 		"testfile": "Hello ftp!",
 	}))
-	defer ts.Close()
 	ts.Config.Logger = testLogger{t}
+	ts.StartTLS()
+	defer ts.Close()
 
 	dir, err := ioutil.TempDir("", "ftp-")
 	if err != nil {
