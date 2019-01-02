@@ -35,9 +35,12 @@ type ServerConn struct {
 	rwc     net.Conn
 	ctrl    *dumbTelnetConn
 	scanner *bufio.Scanner
+	closing bool
 
-	user string
-	auth *Authorization
+	// the authorization info
+	user    string
+	auth    *Authorization
+	failCnt int // the count of failing authorization
 
 	// pwd is current working directory.
 	pwd string
@@ -85,7 +88,7 @@ func (c *ServerConn) serve(ctx context.Context) {
 
 	c.WriteReply(StatusReady, "Service ready")
 
-	for c.scanner.Scan() {
+	for c.scanner.Scan() && !c.closing {
 		text := c.scanner.Text()
 		cmd, err := ParseCommand(text)
 		if err != nil {

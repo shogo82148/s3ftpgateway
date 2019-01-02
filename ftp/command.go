@@ -500,21 +500,38 @@ func (commandPass) RequireAuth() bool  { return false }
 func (commandPass) Execute(ctx context.Context, c *ServerConn, cmd *Command) {
 	auth, err := c.server.authorizer().Authorize(ctx, c, c.user, cmd.Arg)
 	if err != nil {
-		select {
-		case <-time.After(5 * time.Second):
-		case <-ctx.Done():
-			return
+		c.failCnt++
+		if c.failCnt > 1 {
+			if err := sleepWithContext(ctx, 5*time.Second); err != nil {
+				c.server.logger().Printf(c.sessionID, "fail to execute PASS command: %v", err)
+				c.closing = true
+				return
+			}
 		}
 		if err == ErrAuthorizeFailed {
 			c.WriteReply(StatusNotLoggedIn, "Not logged in.")
+			c.closing = c.failCnt > 5
 			return
 		}
 		c.WriteReply(StatusBadCommand, "Internal error.")
+		c.closing = c.failCnt > 5
 		return
 	}
+	c.failCnt = 0
 	c.auth = auth
 	c.pwd = "/"
 	c.WriteReply(StatusLoggedIn, "User logged in, proceed.")
+}
+
+func sleepWithContext(ctx context.Context, d time.Duration) error {
+	timer := time.NewTimer(d)
+	defer timer.Stop()
+	select {
+	case <-timer.C:
+	case <-ctx.Done():
+		return ctx.Err()
+	}
+	return nil
 }
 
 type commandPasv struct{}
