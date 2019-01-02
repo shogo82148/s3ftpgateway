@@ -501,7 +501,7 @@ func (commandPass) Execute(ctx context.Context, c *ServerConn, cmd *Command) {
 	auth, err := c.server.authorizer().Authorize(ctx, c, c.user, cmd.Arg)
 	if err != nil {
 		c.failCnt++
-		if c.failCnt > 1 {
+		if c.failCnt > 1 || !isAnonymous(c.user) {
 			if err := sleepWithContext(ctx, 5*time.Second); err != nil {
 				c.server.logger().Printf(c.sessionID, "fail to execute PASS command: %v", err)
 				c.closing = true
@@ -521,6 +521,10 @@ func (commandPass) Execute(ctx context.Context, c *ServerConn, cmd *Command) {
 	c.auth = auth
 	c.pwd = "/"
 	c.WriteReply(StatusLoggedIn, "User logged in, proceed.")
+}
+
+func isAnonymous(user string) bool {
+	return user == "anonymous" || user == "ftp"
 }
 
 func sleepWithContext(ctx context.Context, d time.Duration) error {
