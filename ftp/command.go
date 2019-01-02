@@ -345,7 +345,7 @@ func (commandList) RequireAuth() bool  { return true }
 func (commandList) Execute(ctx context.Context, c *ServerConn, cmd *Command) {
 	path := c.pwd
 
-	// RFC959 as the argument is a path name, but some ftp clients send options(e.g. '-al').
+	// RFC959 says the argument is a path name, but some ftp clients send options(e.g. '-al').
 	// it is hard to parse them, so we just ignore them.
 	if cmd.Arg != "" && cmd.Arg[0] != '-' {
 		path = c.buildPath(cmd.Arg)
