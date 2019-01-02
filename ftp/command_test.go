@@ -558,8 +558,8 @@ func TestRename(t *testing.T) {
 	ts := ftptest.NewUnstartedServer(mapfs.New(map[string]string{
 		"foo.txt": "hello",
 	}))
-	ts.Start()
 	ts.Config.Logger = testLogger{t}
+	ts.Start()
 	defer ts.Close()
 
 	u, err := url.Parse(ts.URL)
