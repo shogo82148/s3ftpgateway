@@ -355,7 +355,7 @@ func TestNlst(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 
-	ts := ftptest.NewServer(mapfs.New(map[string]string{
+	ts := ftptest.NewUnstartedServer(mapfs.New(map[string]string{
 		"foo/bar/hoge.txt": "abc123",
 		"hogehoge.txt":     "foobar",
 	}))
