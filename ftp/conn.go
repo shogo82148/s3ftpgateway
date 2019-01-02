@@ -6,7 +6,6 @@ import (
 	"crypto/tls"
 	"fmt"
 	"io"
-	"log"
 	"net"
 	"os"
 	pkgpath "path"
@@ -78,6 +77,7 @@ func (c *ServerConn) tlsCfg() *tls.Config {
 }
 
 func (c *ServerConn) serve(ctx context.Context) {
+	c.server.logger().Printf(c.sessionID, "a new connection from %s", c.rwc.RemoteAddr().String())
 	ctx, cancel := context.WithCancel(ctx)
 	defer cancel()
 
@@ -95,8 +95,9 @@ func (c *ServerConn) serve(ctx context.Context) {
 		c.execCommand(ctx, cmd)
 	}
 	if err := c.scanner.Err(); err != nil {
-		log.Println(err)
+		c.server.logger().Printf(c.sessionID, "error reading the control connection: %v", err)
 	}
+	c.server.logger().Print(c.sessionID, "closing the connection")
 }
 
 func (c *ServerConn) execCommand(ctx context.Context, cmd *Command) {

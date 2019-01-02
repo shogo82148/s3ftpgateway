@@ -2,7 +2,8 @@ package main
 
 import (
 	"flag"
-	"log"
+
+	"github.com/sirupsen/logrus"
 )
 
 var config string
@@ -14,12 +15,12 @@ func init() {
 func main() {
 	flag.Parse()
 	if config == "" {
-		log.Fatal("-config is missing.")
+		logrus.Fatal("-config is missing.")
 	}
 
 	c, err := LoadConfig(config)
 	if err != nil {
-		log.Fatal("fail to load config: ", err)
+		logrus.WithError(err).Fatal("fail to load config")
 	}
 	Serve(c)
 }
