@@ -281,8 +281,12 @@ func (commandCwd) RequireAuth() bool  { return true }
 func (commandCwd) Execute(ctx context.Context, c *ServerConn, cmd *Command) {
 	path := c.buildPath(cmd.Arg)
 	stat, err := c.fileSystem().Stat(ctx, path)
-	if err != nil || !stat.IsDir() {
+	if err != nil {
 		c.WriteReply(StatusNeedSomeUnavailableResource, "No such directory.")
+		return
+	}
+	if !stat.IsDir() {
+		c.WriteReply(StatusActionAborted, "Not a directory.")
 		return
 	}
 	c.pwd = path
