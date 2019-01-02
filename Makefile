@@ -50,7 +50,7 @@ build-darwin-amd64:
 .PHONY: release-windows-amd64 release-linux-amd64 release-darwin-amd64
 .PHONY: release-targz release-zip release-files release-upload
 
-$(RELEASE_DIR)/go-s3ftpgateway_$(GOOS)_$(GOARCH):
+$(RELEASE_DIR)/s3ftpgateway_$(GOOS)_$(GOARCH):
 	@mkdir -p $@
 
 release-windows-amd64:
