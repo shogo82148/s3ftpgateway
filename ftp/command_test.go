@@ -309,7 +309,7 @@ func TestMkd(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 
-	ts := ftptest.NewServer(mapfs.New(map[string]string{}))
+	ts := ftptest.NewUnstartedServer(mapfs.New(map[string]string{}))
 	ts.Config.Logger = testLogger{t}
 	ts.Start()
 	defer ts.Close()
