@@ -639,6 +639,7 @@ func (commandQuit) RequireAuth() bool  { return false }
 
 func (commandQuit) Execute(ctx context.Context, c *ServerConn, cmd *Command) {
 	c.WriteReply(StatusClosing, "Good bye.")
+	c.closing = true
 }
 
 // commandRetr causes the server-DTP to transfer a copy of the
