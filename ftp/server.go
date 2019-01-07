@@ -167,7 +167,6 @@ func (s *Server) serve(l net.Listener, tlsConfig *tls.Config) error {
 	}
 	defer s.trackListener(&l, false)
 
-	ctx := context.Background()
 	var tempDelay time.Duration // how long to sleep on accept failure
 	for {
 		rw, err := l.Accept()
@@ -200,7 +199,8 @@ func (s *Server) serve(l net.Listener, tlsConfig *tls.Config) error {
 		}
 		go func() {
 			defer s.trackConn(c, false)
-			c.serve(ctx)
+			defer c.Close()
+			c.serve()
 		}()
 	}
 }
@@ -268,7 +268,10 @@ func (s *Server) newConn(rwc net.Conn, tlsConfig *tls.Config) *ServerConn {
 		sessionID = hex.EncodeToString(buf[:])
 	}
 
+	ctx, cancel := context.WithCancel(context.Background())
 	c := &ServerConn{
+		ctx:       ctx,
+		cancel:    cancel,
 		server:    s,
 		tlsConfig: tlsConfig,
 		sessionID: sessionID,
@@ -469,7 +472,7 @@ func (ln tcpKeepAliveListener) Accept() (net.Conn, error) {
 		return nil, err
 	}
 	tc.SetKeepAlive(true)
-	tc.SetKeepAlivePeriod(3 * time.Minute)
+	tc.SetKeepAlivePeriod(10 * time.Minute)
 	return tc, nil
 }
 

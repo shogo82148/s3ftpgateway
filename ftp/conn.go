@@ -26,6 +26,8 @@ const (
 
 // ServerConn is a connection of the ftp server.
 type ServerConn struct {
+	ctx       context.Context
+	cancel    context.CancelFunc
 	server    *Server
 	tlsConfig *tls.Config
 	sessionID string
@@ -58,8 +60,9 @@ type ServerConn struct {
 	rmfrReader io.ReadCloser
 
 	// a connector for data connection
-	mudt sync.Mutex // guard dt
-	dt   dataTransfer
+	mudt          sync.Mutex // guard dt
+	dt            dataTransfer
+	lastExecution time.Time
 
 	// use EPSV command for starting data connection.
 	// if it is true, reject all data connection
@@ -82,18 +85,16 @@ func (c *ServerConn) tlsCfg() *tls.Config {
 	return &tls.Config{}
 }
 
-func (c *ServerConn) serve(ctx context.Context) {
+func (c *ServerConn) serve() {
 	c.server.logger().Printf(c.sessionID, "a new connection from %s", c.rwc.RemoteAddr().String())
-	ctx, cancel := context.WithCancel(ctx)
-	defer cancel()
 
-	defer c.close()
 	defer func() {
 		if c.rmfrReader != nil {
 			c.rmfrReader.Close()
 		}
 	}()
 
+	c.updateLastExecution()
 	c.WriteReply(StatusReady, "Service ready")
 
 	for c.scanner.Scan() && !c.shuttingDown.isSet() {
@@ -102,12 +103,13 @@ func (c *ServerConn) serve(ctx context.Context) {
 			c.WriteReply(StatusNotAvailable, "Service not available, closing control connection.")
 			break
 		}
+		c.updateLastExecution()
 		cmd, err := ParseCommand(text)
 		if err != nil {
 			c.WriteReply(StatusBadCommand, "Syntax error.")
 			continue
 		}
-		c.execCommand(ctx, cmd)
+		c.execCommand(cmd)
 	}
 	if err := c.scanner.Err(); err != nil {
 		c.server.logger().Printf(c.sessionID, "error reading the control connection: %v", err)
@@ -115,8 +117,14 @@ func (c *ServerConn) serve(ctx context.Context) {
 	c.server.logger().Print(c.sessionID, "closing the connection")
 }
 
-func (c *ServerConn) execCommand(ctx context.Context, cmd *Command) {
-	ctx, cancel := context.WithTimeout(ctx, time.Minute)
+func (c *ServerConn) updateLastExecution() {
+	c.mudt.Lock()
+	defer c.mudt.Unlock()
+	c.lastExecution = time.Now()
+}
+
+func (c *ServerConn) execCommand(cmd *Command) {
+	ctx, cancel := context.WithTimeout(c.ctx, time.Minute)
 	defer cancel()
 
 	if cmd.Name != "PASS" {
@@ -231,6 +239,7 @@ func (c *ServerConn) Close() error {
 	c.closeOnce.Do(func() {
 		err = c.close()
 	})
+	c.cancel()
 	return err
 }
 
@@ -238,6 +247,27 @@ func (c *ServerConn) close() error {
 	c.shuttingDown.setTrue()
 	c.rwc.Close()
 	c.closeDataTransfer()
+	return nil
+}
+
+// Shutdown wait for transfer and closes the connection.
+func (c *ServerConn) Shutdown(ctx context.Context) error {
+	err := c.shutdown()
+	select {
+	case <-c.ctx.Done():
+		return err
+	case <-ctx.Done():
+		return ctx.Err()
+	}
+}
+
+func (c *ServerConn) shutdown() error {
+	c.shuttingDown.setTrue()
+	c.mudt.Lock()
+	defer c.mudt.Unlock()
+	if _, ok := c.dt.(emptyDataTransfer); ok && time.Now().Sub(c.lastExecution) > 5*time.Second {
+		return c.rwc.Close()
+	}
 	return nil
 }
 
