@@ -76,6 +76,7 @@ type Server struct {
 
 	mu            sync.Mutex
 	listeners     map[*net.Listener]struct{}
+	conns         map[*ServerConn]struct{}
 	ports         []int // ports are available port numbers.
 	idxPorts      []int // inverted index for ports
 	numEmptyPorts int
@@ -191,8 +192,16 @@ func (s *Server) serve(l net.Listener, tlsConfig *tls.Config) error {
 			return err
 		}
 		tempDelay = 0
+
 		c := s.newConn(rw, tlsConfig)
-		go c.serve(ctx)
+		if !s.trackConn(c, true) {
+			c.Close()
+			return ErrServerClosed
+		}
+		go func() {
+			defer s.trackConn(c, false)
+			c.serve(ctx)
+		}()
 	}
 }
 
@@ -311,6 +320,35 @@ func (s *Server) closeListenersLocked() error {
 	return err
 }
 
+// trackConn adds or removes a ServerConn to the set of tracked conns.
+func (s *Server) trackConn(c *ServerConn, add bool) bool {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.conns == nil {
+		s.conns = make(map[*ServerConn]struct{})
+	}
+	if add {
+		if s.shuttingDown.isSet() {
+			return false
+		}
+		s.conns[c] = struct{}{}
+	} else {
+		delete(s.conns, c)
+	}
+	return true
+}
+
+func (s *Server) closeConnsLocked() error {
+	var err error
+	for c := range s.conns {
+		if cerr := c.Close(); cerr != nil && err == nil {
+			err = cerr
+		}
+		delete(s.conns, c)
+	}
+	return err
+}
+
 // Close immediately closes all active net.Listeners and any connections.
 func (s *Server) Close() error {
 	s.shuttingDown.setTrue()
@@ -318,7 +356,7 @@ func (s *Server) Close() error {
 	defer s.mu.Unlock()
 	s.closeDoneChanLocked()
 	s.closeListenersLocked()
-	// TODO: close all connection.
+	s.closeConnsLocked()
 	return nil
 }
 
