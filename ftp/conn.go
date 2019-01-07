@@ -35,7 +35,9 @@ type ServerConn struct {
 	rwc     net.Conn
 	ctrl    *dumbTelnetConn
 	scanner *bufio.Scanner
-	closing bool
+
+	shuttingDown atomicBool
+	closeOnce    sync.Once
 
 	// the authorization info
 	user    string
@@ -88,8 +90,12 @@ func (c *ServerConn) serve(ctx context.Context) {
 
 	c.WriteReply(StatusReady, "Service ready")
 
-	for c.scanner.Scan() && !c.closing {
+	for c.scanner.Scan() && !c.shuttingDown.isSet() {
 		text := c.scanner.Text()
+		if c.shuttingDown.isSet() {
+			c.WriteReply(StatusNotAvailable, "Service not available, closing control connection.")
+			break
+		}
 		cmd, err := ParseCommand(text)
 		if err != nil {
 			c.WriteReply(StatusBadCommand, "Syntax error.")
@@ -213,20 +219,21 @@ func (c *ServerConn) fileSystem() vfs.FileSystem {
 	return fs
 }
 
+// Close closes all connections inluding the data transfer connection.
+func (c *ServerConn) Close() error {
+	var err error
+	c.closeOnce.Do(func() {
+		err = c.close()
+	})
+	return err
+}
+
 func (c *ServerConn) close() error {
-	if dt := c.dt; dt != nil {
-		dt.Close()
-		c.dt = nil
-	}
-	if rwc := c.rwc; rwc != nil {
-		rwc.Close()
-		c.rwc = nil
-	}
-	if r := c.rmfrReader; r != nil {
-		r.Close()
-		c.rmfr = ""
-		c.rmfrReader = nil
-	}
+	c.shuttingDown.setTrue()
+	c.rwc.Close()
+
+	// TODO: c.dt.Close()
+	// TODO: c.rmfrReader.Close()
 	return nil
 }
 

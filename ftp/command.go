@@ -512,17 +512,21 @@ func (commandPass) Execute(ctx context.Context, c *ServerConn, cmd *Command) {
 		if c.failCnt > 1 || !isAnonymous(c.user) {
 			if err := sleepWithContext(ctx, 5*time.Second); err != nil {
 				c.server.logger().Printf(c.sessionID, "fail to execute PASS command: %v", err)
-				c.closing = true
+				c.shuttingDown.setTrue()
 				return
 			}
 		}
 		if err == ErrAuthorizeFailed {
 			c.WriteReply(StatusNotLoggedIn, "Not logged in.")
-			c.closing = c.failCnt > 5
+			if c.failCnt > 5 {
+				c.shuttingDown.setTrue()
+			}
 			return
 		}
 		c.WriteReply(StatusBadCommand, "Internal error.")
-		c.closing = c.failCnt > 5
+		if c.failCnt > 5 {
+			c.shuttingDown.setTrue()
+		}
 		return
 	}
 	c.failCnt = 0
@@ -639,7 +643,7 @@ func (commandQuit) RequireAuth() bool  { return false }
 
 func (commandQuit) Execute(ctx context.Context, c *ServerConn, cmd *Command) {
 	c.WriteReply(StatusClosing, "Good bye.")
-	c.closing = true
+	c.shuttingDown.setTrue()
 }
 
 // commandRetr causes the server-DTP to transfer a copy of the
