@@ -88,6 +88,11 @@ func (c *ServerConn) serve(ctx context.Context) {
 	defer cancel()
 
 	defer c.close()
+	defer func() {
+		if c.rmfrReader != nil {
+			c.rmfrReader.Close()
+		}
+	}()
 
 	c.WriteReply(StatusReady, "Service ready")
 
@@ -233,7 +238,6 @@ func (c *ServerConn) close() error {
 	c.shuttingDown.setTrue()
 	c.rwc.Close()
 	c.closeDataTransfer()
-	// TODO: c.rmfrReader.Close()
 	return nil
 }
 
