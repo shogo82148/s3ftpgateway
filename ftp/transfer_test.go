@@ -50,7 +50,7 @@ func TestServerConn_newPassiveDataTransfer(t *testing.T) {
 	}
 
 	t.Run("connect", func(t *testing.T) {
-		conn := s.newConn(nil)
+		conn := s.newConn(nil, nil)
 		dt, err := conn.newPassiveDataTransfer()
 		if err != nil {
 			t.Error(err)
@@ -87,7 +87,7 @@ func TestServerConn_newPassiveDataTransfer(t *testing.T) {
 		}
 		defer ln.Close()
 
-		conn1 := s.newConn(nil)
+		conn1 := s.newConn(nil, nil)
 		dt1, err := conn1.newPassiveDataTransfer()
 		if err != nil {
 			t.Fatal(err)
@@ -96,7 +96,7 @@ func TestServerConn_newPassiveDataTransfer(t *testing.T) {
 
 		// all ports that the ftp server can use are all in used.
 		// so newPassiveDataTransfer will return errEmptyPortNotFound.
-		conn2 := s.newConn(nil)
+		conn2 := s.newConn(nil, nil)
 		_, err = conn2.newPassiveDataTransfer()
 		if err != errEmptyPortNotFound {
 			t.Errorf("want errEmptyPortNotFound, got %v", err)

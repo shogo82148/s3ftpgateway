@@ -281,8 +281,12 @@ func (commandCwd) RequireAuth() bool  { return true }
 func (commandCwd) Execute(ctx context.Context, c *ServerConn, cmd *Command) {
 	path := c.buildPath(cmd.Arg)
 	stat, err := c.fileSystem().Stat(ctx, path)
-	if err != nil || !stat.IsDir() {
+	if err != nil {
 		c.WriteReply(StatusNeedSomeUnavailableResource, "No such directory.")
+		return
+	}
+	if !stat.IsDir() {
+		c.WriteReply(StatusActionAborted, "Not a directory.")
 		return
 	}
 	c.pwd = path
@@ -344,9 +348,13 @@ func (commandList) RequireAuth() bool  { return true }
 
 func (commandList) Execute(ctx context.Context, c *ServerConn, cmd *Command) {
 	path := c.pwd
-	if cmd.Arg != "" {
+
+	// RFC959 says the argument is a path name, but some ftp clients send options(e.g. '-al').
+	// it is hard to parse them, so we just ignore them.
+	if cmd.Arg != "" && cmd.Arg[0] != '-' {
 		path = c.buildPath(cmd.Arg)
 	}
+
 	info, err := c.fileSystem().ReadDir(ctx, path)
 	if err != nil {
 		if os.IsNotExist(err) {
@@ -500,19 +508,42 @@ func (commandPass) RequireAuth() bool  { return false }
 func (commandPass) Execute(ctx context.Context, c *ServerConn, cmd *Command) {
 	auth, err := c.server.authorizer().Authorize(ctx, c, c.user, cmd.Arg)
 	if err != nil {
-		select {
-		case <-time.After(5 * time.Second):
-		case <-ctx.Done():
-			return
+		c.failCnt++
+		if c.failCnt > 1 || !isAnonymous(c.user) {
+			if err := sleepWithContext(ctx, 5*time.Second); err != nil {
+				c.server.logger().Printf(c.sessionID, "fail to execute PASS command: %v", err)
+				c.closing = true
+				return
+			}
 		}
 		if err == ErrAuthorizeFailed {
 			c.WriteReply(StatusNotLoggedIn, "Not logged in.")
+			c.closing = c.failCnt > 5
+			return
 		}
 		c.WriteReply(StatusBadCommand, "Internal error.")
+		c.closing = c.failCnt > 5
+		return
 	}
+	c.failCnt = 0
 	c.auth = auth
 	c.pwd = "/"
 	c.WriteReply(StatusLoggedIn, "User logged in, proceed.")
+}
+
+func isAnonymous(user string) bool {
+	return user == "anonymous" || user == "ftp"
+}
+
+func sleepWithContext(ctx context.Context, d time.Duration) error {
+	timer := time.NewTimer(d)
+	defer timer.Stop()
+	select {
+	case <-timer.C:
+	case <-ctx.Done():
+		return ctx.Err()
+	}
+	return nil
 }
 
 type commandPasv struct{}
@@ -608,6 +639,7 @@ func (commandQuit) RequireAuth() bool  { return false }
 
 func (commandQuit) Execute(ctx context.Context, c *ServerConn, cmd *Command) {
 	c.WriteReply(StatusClosing, "Good bye.")
+	c.closing = true
 }
 
 // commandRetr causes the server-DTP to transfer a copy of the
@@ -1237,7 +1269,7 @@ func (commandMlst) Execute(ctx context.Context, c *ServerConn, cmd *Command) {
 type commandMlsd struct{}
 
 func (commandMlsd) IsExtend() bool     { return true }
-func (commandMlsd) RequireParam() bool { return true }
+func (commandMlsd) RequireParam() bool { return false }
 func (commandMlsd) RequireAuth() bool  { return true }
 
 func (commandMlsd) Execute(ctx context.Context, c *ServerConn, cmd *Command) {

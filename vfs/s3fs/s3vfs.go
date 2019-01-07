@@ -107,7 +107,8 @@ func (fs *FileSystem) Open(ctx context.Context, name string) (io.ReadCloser, err
 
 // Lstat returns a FileInfo describing the named file.
 func (fs *FileSystem) Lstat(ctx context.Context, path string) (os.FileInfo, error) {
-	if path == "" {
+	// root is always exists.
+	if path == "" || path == "/" {
 		return commonPrefix{s3.CommonPrefix{
 			Prefix: aws.String(""),
 		}}, nil

@@ -6,7 +6,6 @@ import (
 	"crypto/tls"
 	"fmt"
 	"io"
-	"log"
 	"net"
 	"os"
 	pkgpath "path"
@@ -28,6 +27,7 @@ const (
 // ServerConn is a connection of the ftp server.
 type ServerConn struct {
 	server    *Server
+	tlsConfig *tls.Config
 	sessionID string
 
 	// connection for control
@@ -35,9 +35,12 @@ type ServerConn struct {
 	rwc     net.Conn
 	ctrl    *dumbTelnetConn
 	scanner *bufio.Scanner
+	closing bool
 
-	user string
-	auth *Authorization
+	// the authorization info
+	user    string
+	auth    *Authorization
+	failCnt int // the count of failing authorization
 
 	// pwd is current working directory.
 	pwd string
@@ -66,7 +69,18 @@ func (c *ServerConn) Server() *Server {
 	return c.server
 }
 
+func (c *ServerConn) tlsCfg() *tls.Config {
+	if c.tlsConfig != nil {
+		return c.tlsConfig
+	}
+	if c.server.TLSConfig != nil {
+		return c.server.TLSConfig
+	}
+	return &tls.Config{}
+}
+
 func (c *ServerConn) serve(ctx context.Context) {
+	c.server.logger().Printf(c.sessionID, "a new connection from %s", c.rwc.RemoteAddr().String())
 	ctx, cancel := context.WithCancel(ctx)
 	defer cancel()
 
@@ -74,7 +88,7 @@ func (c *ServerConn) serve(ctx context.Context) {
 
 	c.WriteReply(StatusReady, "Service ready")
 
-	for c.scanner.Scan() {
+	for c.scanner.Scan() && !c.closing {
 		text := c.scanner.Text()
 		cmd, err := ParseCommand(text)
 		if err != nil {
@@ -84,8 +98,9 @@ func (c *ServerConn) serve(ctx context.Context) {
 		c.execCommand(ctx, cmd)
 	}
 	if err := c.scanner.Err(); err != nil {
-		log.Println(err)
+		c.server.logger().Printf(c.sessionID, "error reading the control connection: %v", err)
 	}
+	c.server.logger().Print(c.sessionID, "closing the connection")
 }
 
 func (c *ServerConn) execCommand(ctx context.Context, cmd *Command) {

@@ -63,6 +63,9 @@ func (c *ServerConn) newActiveDataTransfer(ctx context.Context, addr string) (*a
 	if err != nil {
 		return nil, err
 	}
+	if c.tls {
+		conn = tls.Server(conn, c.tlsCfg())
+	}
 	t := &activeDataTransfer{
 		conn: conn,
 	}
@@ -122,7 +125,7 @@ func (c *ServerConn) newPassiveDataTransfer() (*passiveDataTransfer, error) {
 	}
 	l = tcpKeepAliveListener{l.(*net.TCPListener)}
 	if c.tls {
-		l = tls.NewListener(l, c.server.TLSConfig)
+		l = tls.NewListener(l, c.tlsCfg())
 	}
 
 	ch := make(chan chConn)
