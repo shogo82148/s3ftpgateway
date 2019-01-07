@@ -11,12 +11,18 @@ import (
 	"io"
 	"net"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/shogo82148/s3ftpgateway/vfs"
 )
 
 var defaultDialer net.Dialer
+
+type atomicBool int32
+
+func (b *atomicBool) isSet() bool { return atomic.LoadInt32((*int32)(b)) != 0 }
+func (b *atomicBool) setTrue()    { atomic.StoreInt32((*int32)(b), 1) }
 
 // A Server defines patameters for running a FTP server.
 type Server struct {
@@ -66,13 +72,44 @@ type Server struct {
 	// The checking is enabled by default to avoid the bounce attack.
 	DisableAddressCheck bool
 
-	listener net.Listener
+	shuttingDown atomicBool
 
 	mu            sync.Mutex
+	listeners     map[*net.Listener]struct{}
 	ports         []int // ports are available port numbers.
 	idxPorts      []int // inverted index for ports
 	numEmptyPorts int
+	doneChan      chan struct{}
 }
+
+func (s *Server) getDoneChan() <-chan struct{} {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.getDoneChanLocked()
+}
+
+func (s *Server) getDoneChanLocked() chan struct{} {
+	if s.doneChan == nil {
+		s.doneChan = make(chan struct{})
+	}
+	return s.doneChan
+}
+
+func (s *Server) closeDoneChanLocked() {
+	ch := s.getDoneChanLocked()
+	select {
+	case <-ch:
+		// Already closed. Don't close again.
+	default:
+		// Safe to close here. We're the only closer, guarded
+		// by s.mu.
+		close(ch)
+	}
+}
+
+// ErrServerClosed is returned by the Server's Serve, ServeTLS, ListenAndServe,
+// ListenAndServeTLS, ListenAndServeExplicitTLS, and ServeExplicitTLS methods after a call to Shutdown or Close.
+var ErrServerClosed = errors.New("ftp: Server closed")
 
 // ListenAndServe listens on the TCP network address srv.Addr and then calls Serve to handle requests on incoming connections.
 func (s *Server) ListenAndServe() error {
@@ -98,7 +135,6 @@ func (s *Server) ListenAndServeExplicitTLS(certFile, keyFile string) error {
 	if err != nil {
 		return err
 	}
-	defer ln.Close()
 	return s.ServeExplicitTLS(tcpKeepAliveListener{ln.(*net.TCPListener)}, certFile, keyFile)
 }
 
@@ -113,7 +149,6 @@ func (s *Server) ListenAndServeTLS(certFile, keyFile string) error {
 	if err != nil {
 		return err
 	}
-	defer ln.Close()
 	return s.ServeTLS(tcpKeepAliveListener{ln.(*net.TCPListener)}, certFile, keyFile)
 }
 
@@ -123,11 +158,24 @@ func (s *Server) Serve(l net.Listener) error {
 }
 
 func (s *Server) serve(l net.Listener, tlsConfig *tls.Config) error {
+	l = &onceCloseListener{Listener: l}
+	defer l.Close()
+
+	if !s.trackListener(&l, true) {
+		return ErrServerClosed
+	}
+	defer s.trackListener(&l, false)
+
 	ctx := context.Background()
 	var tempDelay time.Duration // how long to sleep on accept failure
 	for {
 		rw, err := l.Accept()
 		if err != nil {
+			select {
+			case <-s.getDoneChan():
+				return ErrServerClosed
+			default:
+			}
 			if ne, ok := err.(net.Error); ok && ne.Temporary() {
 				if tempDelay == 0 {
 					tempDelay = 5 * time.Millisecond
@@ -233,9 +281,45 @@ func (s *Server) authorizer() Authorizer {
 	return auth
 }
 
+// trackListener adds or removes a net.Listener to the set of tracked
+// listeners.
+func (s *Server) trackListener(ln *net.Listener, add bool) bool {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.listeners == nil {
+		s.listeners = make(map[*net.Listener]struct{})
+	}
+	if add {
+		if s.shuttingDown.isSet() {
+			return false
+		}
+		s.listeners[ln] = struct{}{}
+	} else {
+		delete(s.listeners, ln)
+	}
+	return true
+}
+
+func (s *Server) closeListenersLocked() error {
+	var err error
+	for ln := range s.listeners {
+		if cerr := (*ln).Close(); cerr != nil && err == nil {
+			err = cerr
+		}
+		delete(s.listeners, ln)
+	}
+	return err
+}
+
 // Close immediately closes all active net.Listeners and any connections.
 func (s *Server) Close() error {
-	return s.listener.Close()
+	s.shuttingDown.setTrue()
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.closeDoneChanLocked()
+	s.closeListenersLocked()
+	// TODO: close all connection.
+	return nil
 }
 
 // Shutdown gracefully shuts down the server without interrupting any active data transfers.
@@ -250,6 +334,12 @@ func (s *Server) Close() error {
 // Once Shutdown has been called on a server, it may not be reused;
 // future calls to methods such as Serve will return ErrServerClosed.
 func (s *Server) Shutdown(ctx context.Context) error {
+	s.shuttingDown.setTrue()
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.closeDoneChanLocked()
+	s.closeListenersLocked()
+	// TODO: wait for all transfers are done.
 	return nil
 }
 
