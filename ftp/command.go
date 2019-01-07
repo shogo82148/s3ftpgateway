@@ -154,7 +154,7 @@ func (commandAbor) RequireParam() bool { return true }
 func (commandAbor) RequireAuth() bool  { return true }
 
 func (commandAbor) Execute(ctx context.Context, c *ServerConn, cmd *Command) {
-	c.dt.Abort()
+	c.closeDataTransfer()
 }
 
 // ACCOUNT (ACCT)
@@ -229,7 +229,7 @@ func (commandAppe) Execute(ctx context.Context, c *ServerConn, cmd *Command) {
 			c.WriteReply(StatusTransfertAborted, "Requested file action aborted.")
 			return
 		}
-		defer conn.Close()
+		defer c.closeDataTransfer()
 
 		chSuccess <- true
 		cr := &countReader{Reader: conn}
@@ -374,7 +374,7 @@ func (commandList) Execute(ctx context.Context, c *ServerConn, cmd *Command) {
 	}
 
 	go func() {
-		defer conn.Close()
+		defer c.closeDataTransfer()
 		w := bufio.NewWriter(conn)
 		bytes := int64(0)
 		for _, fi := range info {
@@ -447,7 +447,7 @@ func (commandNlst) Execute(ctx context.Context, c *ServerConn, cmd *Command) {
 	}
 
 	go func() {
-		defer conn.Close()
+		defer c.closeDataTransfer()
 		w := bufio.NewWriter(conn)
 		bytes := int64(0)
 		for _, fi := range info {
@@ -679,7 +679,7 @@ func (commandRetr) Execute(ctx context.Context, c *ServerConn, cmd *Command) {
 			cherr <- err
 			return
 		}
-		defer conn.Close()
+		defer c.closeDataTransfer()
 
 		// starting to transfer succeed.
 		cherr <- nil
@@ -845,7 +845,7 @@ func (commandStor) Execute(ctx context.Context, c *ServerConn, cmd *Command) {
 	}
 
 	go func() {
-		defer conn.Close()
+		defer c.closeDataTransfer()
 		r := &countReader{Reader: conn}
 		err = c.fileSystem().Create(context.Background(), name, r)
 		if err != nil {
@@ -898,7 +898,7 @@ func (commandStou) Execute(ctx context.Context, c *ServerConn, cmd *Command) {
 	}
 
 	go func() {
-		defer conn.Close()
+		defer c.closeDataTransfer()
 		r := &countReader{Reader: conn}
 		err = c.fileSystem().Create(context.Background(), name, r)
 		if err != nil {
@@ -1296,7 +1296,7 @@ func (commandMlsd) Execute(ctx context.Context, c *ServerConn, cmd *Command) {
 	}
 
 	go func() {
-		defer conn.Close()
+		defer c.closeDataTransfer()
 		w := bufio.NewWriter(conn)
 		bytes := int64(0)
 		for _, fi := range info {

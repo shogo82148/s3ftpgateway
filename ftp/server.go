@@ -264,7 +264,7 @@ func (s *Server) newConn(rwc net.Conn, tlsConfig *tls.Config) *ServerConn {
 		tlsConfig: tlsConfig,
 		sessionID: sessionID,
 		rwc:       rwc,
-		dt:        defaultDataTransfer{},
+		dt:        emptyDataTransfer{},
 	}
 
 	// setup control channel

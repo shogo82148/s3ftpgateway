@@ -58,7 +58,8 @@ type ServerConn struct {
 	rmfrReader io.ReadCloser
 
 	// a connector for data connection
-	dt dataTransfer
+	mudt sync.Mutex // guard dt
+	dt   dataTransfer
 
 	// use EPSV command for starting data connection.
 	// if it is true, reject all data connection
@@ -231,8 +232,7 @@ func (c *ServerConn) Close() error {
 func (c *ServerConn) close() error {
 	c.shuttingDown.setTrue()
 	c.rwc.Close()
-
-	// TODO: c.dt.Close()
+	c.closeDataTransfer()
 	// TODO: c.rmfrReader.Close()
 	return nil
 }

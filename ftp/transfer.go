@@ -12,28 +12,19 @@ import (
 
 type dataTransfer interface {
 	// Conn returns the currect data connection.
-	// If the connection is closed, Conn returns new connection next time.
 	Conn(ctx context.Context) (net.Conn, error)
-
-	// Abort force closes current data connection.
-	Abort() error
 
 	// Close closes the data transfer.
 	Close() error
 }
 
-type defaultDataTransfer struct{}
+type emptyDataTransfer struct{}
 
-func (defaultDataTransfer) Conn(ctx context.Context) (net.Conn, error) {
-	// TODO:
-	return nil, net.UnknownNetworkError("not implemented")
+func (emptyDataTransfer) Conn(ctx context.Context) (net.Conn, error) {
+	return nil, errors.New("alread closed")
 }
 
-func (defaultDataTransfer) Abort() error {
-	return nil
-}
-
-func (defaultDataTransfer) Close() error {
+func (emptyDataTransfer) Close() error {
 	return nil
 }
 
@@ -70,18 +61,12 @@ func (c *ServerConn) newActiveDataTransfer(ctx context.Context, addr string) (*a
 		conn: conn,
 	}
 
-	// replace old data transfer.
-	c.dt.Close()
-	c.dt = t
+	c.setDataTransfer(t)
 	return t, nil
 }
 
 func (t *activeDataTransfer) Conn(ctx context.Context) (net.Conn, error) {
 	return t.conn, nil
-}
-
-func (t *activeDataTransfer) Abort() error {
-	return t.conn.Close()
 }
 
 func (t *activeDataTransfer) Close() error {
@@ -139,16 +124,15 @@ func (c *ServerConn) newPassiveDataTransfer() (*passiveDataTransfer, error) {
 	}
 	go t.listen(ch)
 
-	// replace
-	c.dt.Close()
-	c.dt = t
-
+	c.setDataTransfer(t)
 	return t, nil
 }
 
 func (t *passiveDataTransfer) listen(ch chan<- chConn) {
 	var tempDelay time.Duration // how long to sleep on accept failure
+	defer t.s.releasePassivePort(t.port)
 	defer t.l.Close()
+	defer close(ch)
 	for {
 		rw, err := t.l.Accept()
 		if err != nil {
@@ -202,63 +186,36 @@ func (t *passiveDataTransfer) validRemote(conn net.Conn) bool {
 	return data.IP.Equal(ctrl)
 }
 
-type passiveDataTransferConn struct {
-	net.Conn
-	transfer *passiveDataTransfer
-}
-
-func (c passiveDataTransferConn) Close() error {
-	c.transfer.mu.Lock()
-	c.transfer.conn = nil
-	c.transfer.mu.Unlock()
-	return c.Conn.Close()
-}
-
 func (t *passiveDataTransfer) Conn(ctx context.Context) (net.Conn, error) {
-	t.mu.Lock()
-	defer t.mu.Unlock()
-	if t.conn != nil {
-		return t.conn, nil
-	}
-
 	select {
-	case c := <-t.ch:
+	case c, ok := <-t.ch:
+		if !ok {
+			return nil, errors.New("alread closed")
+		}
 		if c.err != nil {
 			return nil, c.err
 		}
-		conn := passiveDataTransferConn{
-			Conn:     c.conn,
-			transfer: t,
-		}
-		t.conn = conn
-		return conn, nil
+		t.mu.Lock()
+		defer t.mu.Unlock()
+		t.conn = c.conn
+		return c.conn, nil
 	case <-ctx.Done():
 		return nil, ctx.Err()
 	}
 }
 
-func (t *passiveDataTransfer) Abort() error {
-	var conn net.Conn
-	t.mu.Lock()
-	conn = t.conn
-	t.mu.Unlock()
-	if conn != nil {
-		return conn.Close()
-	}
-	return nil
-}
-
 func (t *passiveDataTransfer) Close() error {
-	var conn net.Conn
+	var connErr error
 	t.mu.Lock()
-	conn = t.conn
-	t.mu.Unlock()
-	if conn != nil {
-		conn.Close()
+	if t.conn != nil {
+		connErr = t.conn.Close()
 	}
+	t.mu.Unlock()
 	close(t.closed)
-	t.s.releasePassivePort(t.port)
-	return t.l.Close()
+	if err := t.l.Close(); err != nil && connErr == nil {
+		return err
+	}
+	return connErr
 }
 
 // onceCloseListener wraps a net.Listener, protecting it from
@@ -275,3 +232,15 @@ func (oc *onceCloseListener) Close() error {
 }
 
 func (oc *onceCloseListener) close() { oc.closeErr = oc.Listener.Close() }
+
+func (c *ServerConn) setDataTransfer(dt dataTransfer) error {
+	c.mudt.Lock()
+	defer c.mudt.Unlock()
+	err := c.dt.Close() // close previous one
+	c.dt = dt
+	return err
+}
+
+func (c *ServerConn) closeDataTransfer() error {
+	return c.setDataTransfer(emptyDataTransfer{})
+}
