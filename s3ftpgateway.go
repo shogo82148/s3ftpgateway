@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"net"
 	"sync"
 	"time"
@@ -8,6 +9,7 @@ import (
 	"github.com/aws/aws-sdk-go-v2/aws/external"
 	"github.com/shogo82148/s3ftpgateway/ftp"
 	"github.com/shogo82148/s3ftpgateway/vfs/s3fs"
+	"github.com/shogo82148/server-starter/listener"
 	"github.com/sirupsen/logrus"
 )
 
@@ -83,15 +85,14 @@ type listenerConfig struct {
 	keyFile  string
 }
 
-func listeners(config *Config) (ls []listenerConfig, err error) {
-	defer func() {
-		if err != nil {
-			for _, l := range ls {
-				l.listener.Close()
-			}
-		}
-	}()
+func listeners(config *Config) ([]listenerConfig, error) {
+	lc, err := listener.PortsFallback()
+	if err != nil {
+		return nil, err
+	}
 
+	var lastErr error
+	ls := make([]listenerConfig, 0, len(config.Listenrs))
 	for _, listener := range config.Listenrs {
 		addr := listener.Address
 		if addr == "" {
@@ -101,10 +102,10 @@ func listeners(config *Config) (ls []listenerConfig, err error) {
 				addr = ":ftp"
 			}
 		}
-		var l net.Listener
-		l, err = net.Listen("tcp", addr)
+		l, err := lc.Listen(context.Background(), "tcp", addr)
 		if err != nil {
-			return
+			lastErr = err
+			continue
 		}
 		l = newTCPKeepAliveListener(l)
 
@@ -115,7 +116,14 @@ func listeners(config *Config) (ls []listenerConfig, err error) {
 			keyFile:  listener.CertificateKey,
 		})
 	}
-	return
+
+	if lastErr != nil {
+		for _, l := range ls {
+			l.listener.Close()
+		}
+		return nil, lastErr
+	}
+	return ls, nil
 }
 
 func newTCPKeepAliveListener(l net.Listener) net.Listener {
