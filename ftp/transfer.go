@@ -242,5 +242,9 @@ func (c *ServerConn) setDataTransfer(dt dataTransfer) error {
 }
 
 func (c *ServerConn) closeDataTransfer() error {
-	return c.setDataTransfer(emptyDataTransfer{})
+	err := c.setDataTransfer(emptyDataTransfer{})
+	if c.shuttingDown.isSet() {
+		c.Close()
+	}
+	return err
 }
