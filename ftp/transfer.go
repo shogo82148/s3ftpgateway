@@ -59,8 +59,22 @@ func (c *ServerConn) newActiveDataTransfer(ctx context.Context, addr string) (*a
 	}
 
 	dialer := c.server.dialer()
+	var tempDelay time.Duration // how long to sleep on dial failure
+RETRY:
 	conn, err := dialer.DialContext(ctx, "tcp", addr)
 	if err != nil {
+		if ne, ok := err.(net.Error); ok && ne.Temporary() {
+			if tempDelay == 0 {
+				tempDelay = 5 * time.Millisecond
+			} else {
+				tempDelay *= 2
+			}
+			if max := 1 * time.Second; tempDelay > max {
+				tempDelay = max
+			}
+			time.Sleep(tempDelay)
+			goto RETRY
+		}
 		return nil, err
 	}
 	if c.tls {
