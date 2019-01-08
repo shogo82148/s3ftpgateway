@@ -1037,7 +1037,9 @@ func TestShutdown_DataTransfer(t *testing.T) {
 	shutdownRes := make(chan error, 1)
 	go func() {
 		time.Sleep(time.Second)
-		shutdownRes <- ts.Config.Shutdown(context.Background())
+		ctx, cancel := context.WithTimeout(ctx, 2*time.Second)
+		defer cancel()
+		shutdownRes <- ts.Config.Shutdown(ctx)
 	}()
 
 	// but the tests will succeed, because the Shutdown is graceful.
@@ -1055,7 +1057,8 @@ my $result = "";
 open my $fh, ">", \$result;
 ok $ftp->get('testfile', $fh), 'get'; # it takes 2 seconds.
 is $result, "Hello ftp!";
-ok $ftp->quit(), 'quit';
+sleep 2;
+# do not call $ftp->quit(), but the connection will be closed by the Shutdown.
 done_testing;
 `
 	perl.Prove(ctx, t, script, u.Host)
@@ -1074,15 +1077,19 @@ func (fs delayedFS) Open(ctx context.Context, name string) (io.ReadCloser, error
 	if err != nil {
 		return nil, err
 	}
-	return delayedReader{r}, nil
+	return &delayedReader{ReadCloser: r}, nil
 }
 
 type delayedReader struct {
 	io.ReadCloser
+	cnt int
 }
 
-func (r delayedReader) Read(p []byte) (int, error) {
-	time.Sleep(3 * time.Second)
+func (r *delayedReader) Read(p []byte) (int, error) {
+	if r.cnt == 0 {
+		time.Sleep(2 * time.Second)
+	}
+	r.cnt++
 	return r.ReadCloser.Read(p)
 }
 

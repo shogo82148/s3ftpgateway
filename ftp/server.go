@@ -392,7 +392,7 @@ func (s *Server) Shutdown(ctx context.Context) error {
 	s.shutdownConnsLocked()
 	s.mu.Unlock()
 
-	ticker := time.NewTicker(500 * time.Millisecond)
+	ticker := time.NewTicker(200 * time.Millisecond)
 	defer ticker.Stop()
 	for {
 		var cnt int

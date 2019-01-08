@@ -40,6 +40,7 @@ type ServerConn struct {
 
 	shuttingDown atomicBool
 	closeOnce    sync.Once
+	closeErr     error
 
 	// the authorization info
 	user    string
@@ -235,19 +236,19 @@ func (c *ServerConn) fileSystem() vfs.FileSystem {
 
 // Close closes all connections inluding the data transfer connection.
 func (c *ServerConn) Close() error {
-	var err error
-	c.closeOnce.Do(func() {
-		err = c.close()
-	})
 	c.cancel()
-	return err
+	c.closeOnce.Do(c.close)
+	return c.closeErr
 }
 
-func (c *ServerConn) close() error {
+func (c *ServerConn) close() {
 	c.shuttingDown.setTrue()
-	c.rwc.Close()
-	c.closeDataTransfer()
-	return nil
+	if err := c.closeDataTransfer(); err != nil && c.closeErr == nil {
+		c.closeErr = err
+	}
+	if err := c.rwc.Close(); err != nil && c.closeErr == nil {
+		c.closeErr = err
+	}
 }
 
 // Shutdown wait for transfer and closes the connection.
