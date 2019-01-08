@@ -3,7 +3,9 @@ package main
 import (
 	"context"
 	"net"
-	"sync"
+	"os"
+	"os/signal"
+	"syscall"
 	"time"
 
 	"github.com/aws/aws-sdk-go-v2/aws/external"
@@ -56,33 +58,84 @@ func Serve(config *Config) {
 		Logger:              logger{},
 	}
 
-	var wg sync.WaitGroup
+	// start to serve
+	cherr := make(chan error, len(ls))
 	for _, l := range ls {
 		l := l
-		wg.Add(1)
 		go func() {
-			defer wg.Done()
-			if l.tls {
-				logrus.WithField("address", l.listener.Addr().String()).Info("start to listen in tls mode")
-				if err := s.ServeTLS(l.listener, l.certFile, l.keyFile); err != nil {
-					logrus.WithError(err).Fatal("fail to serve")
-				}
-			} else {
-				logrus.WithField("address", l.listener.Addr().String()).Info("start to listen")
-				if err := s.Serve(l.listener); err != nil {
-					logrus.WithError(err).Fatal("fail to serve")
-				}
-			}
+			cherr <- serve(s, l)
 		}()
 	}
-	wg.Wait()
+
+	// handle signals
+	chsig := make(chan os.Signal, 1)
+	signal.Notify(
+		chsig,
+		syscall.SIGHUP,
+		syscall.SIGINT,
+		syscall.SIGTERM,
+		syscall.SIGQUIT,
+	)
+
+	var exitCode int
+	var chshutdown chan struct{}
+	for {
+		select {
+		case err := <-cherr:
+			if err == ftp.ErrServerClosed {
+				break
+			}
+			logrus.WithError(err).Error("fail to start the server")
+			exitCode = 1
+			if chshutdown != nil {
+				break
+			}
+			chshutdown = make(chan struct{})
+			go func() {
+				defer close(chshutdown)
+				ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+				defer cancel()
+				if err := s.Shutdown(ctx); err != nil {
+					s.Close()
+				}
+			}()
+		case sig := <-chsig:
+			if chshutdown != nil {
+				logrus.Infof("received %s, force close...", sig)
+				s.Close()
+				break
+			}
+			logrus.Infof("received %s, shutting down...", sig)
+			chshutdown = make(chan struct{})
+			go func() {
+				defer close(chshutdown)
+				s.Shutdown(context.Background())
+			}()
+		case <-chshutdown:
+			logrus.Infof("exit with %d", exitCode)
+			os.Exit(exitCode)
+		}
+	}
+}
+
+func serve(s *ftp.Server, l listenerConfig) error {
+	if l.tls {
+		logrus.WithFields(logrus.Fields{
+			"address": l.listener.Addr().String(),
+			"mode":    "implicit tls",
+		}).Info("start to listen")
+		return s.ServeTLS(l.listener, "", "")
+	}
+	logrus.WithFields(logrus.Fields{
+		"address": l.listener.Addr().String(),
+		"mode":    "plain",
+	}).Info("start to listen")
+	return s.Serve(l.listener)
 }
 
 type listenerConfig struct {
 	listener net.Listener
 	tls      bool
-	certFile string
-	keyFile  string
 }
 
 func listeners(config *Config) ([]listenerConfig, error) {
@@ -112,8 +165,6 @@ func listeners(config *Config) ([]listenerConfig, error) {
 		ls = append(ls, listenerConfig{
 			listener: l,
 			tls:      listener.TLS,
-			certFile: listener.Certificate,
-			keyFile:  listener.CertificateKey,
 		})
 	}
 
