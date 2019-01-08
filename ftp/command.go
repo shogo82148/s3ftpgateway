@@ -145,6 +145,17 @@ var commands = map[string]command{
 	"MLST": commandMlst{},
 	// "REST": nil, // I gave up, see https://github.com/shogo82148/s3ftpgateway/pull/34
 	"SIZE": commandSize{},
+
+	// HTTP methods.
+	"GET":     commandReject{},
+	"HEAD":    commandReject{},
+	"POST":    commandReject{},
+	"PUT":     commandReject{},
+	"DELETE":  commandReject{},
+	"CONNECT": commandReject{},
+	"OPTIONS": commandReject{},
+	"TRACE":   commandReject{},
+	"PATCH":   commandReject{},
 }
 
 type commandAbor struct{}
@@ -1382,4 +1393,16 @@ func (commandSize) Execute(ctx context.Context, c *ServerConn, cmd *Command) {
 		return
 	}
 	c.WriteReply(StatusFile, strconv.FormatInt(stat.Size(), 10))
+}
+
+// commandReject is used for rejecting unsupported protocols, such as http.
+// protects from web browsers which are attacked.
+type commandReject struct{}
+
+func (commandReject) IsExtend() bool     { return false }
+func (commandReject) RequireParam() bool { return false }
+func (commandReject) RequireAuth() bool  { return false }
+
+func (commandReject) Execute(ctx context.Context, c *ServerConn, cmd *Command) {
+	c.shuttingDown.setTrue()
 }
