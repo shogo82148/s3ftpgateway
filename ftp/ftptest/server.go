@@ -7,6 +7,8 @@ import (
 	"flag"
 	"fmt"
 	"net"
+	"sync"
+	"time"
 
 	"github.com/shogo82148/s3ftpgateway/ftp"
 	"github.com/shogo82148/s3ftpgateway/ftp/internal"
@@ -61,6 +63,7 @@ type Server struct {
 	Config *ftp.Server
 
 	certificate *x509.Certificate
+	wg          sync.WaitGroup
 }
 
 // NewServer starts and returns a new Server.
@@ -98,7 +101,7 @@ func (s *Server) Start() {
 	}
 	s.URL = "ftp://" + s.Listener.Addr().String()
 	s.setupTLS()
-	go s.Config.Serve(s.Listener)
+	s.goServe()
 }
 
 // StartTLS starts TLS on a server from NewUnstartedServer.
@@ -109,7 +112,14 @@ func (s *Server) StartTLS() {
 	s.setupTLS()
 	s.Listener = tls.NewListener(s.Listener, s.Config.TLSConfig)
 	s.URL = "ftps://" + s.Listener.Addr().String()
-	go s.Config.Serve(s.Listener)
+	s.goServe()
+}
+func (s *Server) goServe() {
+	s.wg.Add(1)
+	go func() {
+		defer s.wg.Done()
+		s.Config.Serve(s.Listener)
+	}()
 }
 
 func (s *Server) setupTLS() {
@@ -142,5 +152,13 @@ func (s *Server) Certificate() *x509.Certificate {
 
 // Close shuts down the server.
 func (s *Server) Close() {
-	// TODO: shut down the server.
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+
+	// try to shut down
+	if err := s.Config.Shutdown(ctx); err != nil {
+		// fails, force close the server.
+		s.Config.Close()
+	}
+	s.wg.Wait()
 }
