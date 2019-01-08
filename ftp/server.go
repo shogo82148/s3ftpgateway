@@ -363,20 +363,6 @@ func (s *Server) shutdownConnsLocked() error {
 	return err
 }
 
-func (s *Server) closeIdleConns() bool {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	quiescent := true
-	for c := range s.conns {
-		if c.closeIfIdle() {
-			delete(s.conns, c)
-		} else {
-			quiescent = false
-		}
-	}
-	return quiescent
-}
-
 // Close immediately closes all active net.Listeners and any connections.
 func (s *Server) Close() error {
 	s.shuttingDown.setTrue()
@@ -410,7 +396,11 @@ func (s *Server) Shutdown(ctx context.Context) error {
 	ticker := time.NewTicker(200 * time.Millisecond)
 	defer ticker.Stop()
 	for {
-		if s.closeIdleConns() {
+		s.mu.Lock()
+		s.shutdownConnsLocked()
+		cnt := len(s.conns)
+		s.mu.Unlock()
+		if cnt == 0 {
 			return nil
 		}
 		select {

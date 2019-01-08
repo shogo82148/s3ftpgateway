@@ -253,8 +253,8 @@ func (c *ServerConn) Shutdown(ctx context.Context) error {
 	ticker := time.NewTicker(200 * time.Millisecond)
 	defer ticker.Stop()
 	for {
-		if c.closeIfIdle() {
-			return nil
+		if err := c.shutdown(); err != nil {
+			return err
 		}
 		select {
 		case <-ctx.Done():
@@ -262,14 +262,6 @@ func (c *ServerConn) Shutdown(ctx context.Context) error {
 		case <-ticker.C:
 		}
 	}
-}
-
-func (c *ServerConn) closeIfIdle() bool {
-	if c.executing.isSet() {
-		return false
-	}
-	c.Close()
-	return true
 }
 
 func (c *ServerConn) shutdown() error {
