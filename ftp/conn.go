@@ -26,6 +26,8 @@ const (
 
 // ServerConn is a connection of the ftp server.
 type ServerConn struct {
+	ctx       context.Context
+	cancel    context.CancelFunc
 	server    *Server
 	tlsConfig *tls.Config
 	sessionID string
@@ -35,7 +37,11 @@ type ServerConn struct {
 	rwc     net.Conn
 	ctrl    *dumbTelnetConn
 	scanner *bufio.Scanner
-	closing bool
+
+	executing    atomicBool
+	shuttingDown atomicBool
+	closeOnce    sync.Once
+	closeErr     error
 
 	// the authorization info
 	user    string
@@ -56,7 +62,8 @@ type ServerConn struct {
 	rmfrReader io.ReadCloser
 
 	// a connector for data connection
-	dt dataTransfer
+	mudt sync.Mutex // guard dt
+	dt   dataTransfer
 
 	// use EPSV command for starting data connection.
 	// if it is true, reject all data connection
@@ -79,23 +86,31 @@ func (c *ServerConn) tlsCfg() *tls.Config {
 	return &tls.Config{}
 }
 
-func (c *ServerConn) serve(ctx context.Context) {
+func (c *ServerConn) serve() {
 	c.server.logger().Printf(c.sessionID, "a new connection from %s", c.rwc.RemoteAddr().String())
-	ctx, cancel := context.WithCancel(ctx)
-	defer cancel()
 
-	defer c.close()
+	defer func() {
+		if c.rmfrReader != nil {
+			c.rmfrReader.Close()
+		}
+	}()
 
 	c.WriteReply(StatusReady, "Service ready")
 
-	for c.scanner.Scan() && !c.closing {
+	for !c.shuttingDown.isSet() && c.scanner.Scan() {
+		c.executing.setTrue()
 		text := c.scanner.Text()
+		if c.shuttingDown.isSet() {
+			c.WriteReply(StatusNotAvailable, "Service not available, closing control connection.")
+			break
+		}
 		cmd, err := ParseCommand(text)
 		if err != nil {
 			c.WriteReply(StatusBadCommand, "Syntax error.")
 			continue
 		}
-		c.execCommand(ctx, cmd)
+		c.execCommand(cmd)
+		c.executing.setFalse()
 	}
 	if err := c.scanner.Err(); err != nil {
 		c.server.logger().Printf(c.sessionID, "error reading the control connection: %v", err)
@@ -103,8 +118,8 @@ func (c *ServerConn) serve(ctx context.Context) {
 	c.server.logger().Print(c.sessionID, "closing the connection")
 }
 
-func (c *ServerConn) execCommand(ctx context.Context, cmd *Command) {
-	ctx, cancel := context.WithTimeout(ctx, time.Minute)
+func (c *ServerConn) execCommand(cmd *Command) {
+	ctx, cancel := context.WithTimeout(c.ctx, time.Minute)
 	defer cancel()
 
 	if cmd.Name != "PASS" {
@@ -213,19 +228,48 @@ func (c *ServerConn) fileSystem() vfs.FileSystem {
 	return fs
 }
 
-func (c *ServerConn) close() error {
-	if dt := c.dt; dt != nil {
-		dt.Close()
-		c.dt = nil
+// Close closes all connections inluding the data transfer connection.
+func (c *ServerConn) Close() error {
+	c.cancel()
+	c.closeOnce.Do(c.close)
+	return c.closeErr
+}
+
+func (c *ServerConn) close() {
+	c.shuttingDown.setTrue()
+	if err := c.closeDataTransfer(); err != nil && c.closeErr == nil {
+		c.closeErr = err
 	}
-	if rwc := c.rwc; rwc != nil {
-		rwc.Close()
-		c.rwc = nil
+	if err := c.rwc.Close(); err != nil && c.closeErr == nil {
+		c.closeErr = err
 	}
-	if r := c.rmfrReader; r != nil {
-		r.Close()
-		c.rmfr = ""
-		c.rmfrReader = nil
+}
+
+// Shutdown wait for transfer and closes the connection.
+func (c *ServerConn) Shutdown(ctx context.Context) error {
+	if err := c.shutdown(); err != nil {
+		return err
+	}
+	ticker := time.NewTicker(200 * time.Millisecond)
+	defer ticker.Stop()
+	for {
+		if err := c.shutdown(); err != nil {
+			return err
+		}
+		select {
+		case <-ctx.Done():
+			return ctx.Err()
+		case <-ticker.C:
+		}
+	}
+}
+
+func (c *ServerConn) shutdown() error {
+	c.shuttingDown.setTrue()
+	c.mudt.Lock()
+	defer c.mudt.Unlock()
+	if _, ok := c.dt.(emptyDataTransfer); ok && !c.executing.isSet() {
+		return c.rwc.Close()
 	}
 	return nil
 }

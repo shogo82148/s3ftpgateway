@@ -70,7 +70,6 @@ func TestServerConn_newPassiveDataTransfer(t *testing.T) {
 		if err != nil {
 			t.Error(err)
 		}
-		defer c.Close()
 		data, err := ioutil.ReadAll(c)
 		if err != nil {
 			t.Error(err)
