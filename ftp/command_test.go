@@ -12,6 +12,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/shogo82148/s3ftpgateway/vfs"
+
 	tap "github.com/shogo82148/go-tap"
 	"github.com/shogo82148/s3ftpgateway/ftp"
 	"github.com/shogo82148/s3ftpgateway/ftp/ftptest"
@@ -1006,6 +1008,82 @@ ok $ftp->quit(), 'quit';
 # done_testing;
 `
 	perl.Prove(ctx, t, script, u.Host)
+}
+
+func TestShutdown_DataTransfer(t *testing.T) {
+	perl, err := newPerlExecutor()
+	if err != nil {
+		t.Skipf("perl is required for this test: %v", err)
+		return
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+
+	fs := delayedFS{mapfs.New(map[string]string{
+		"testfile": "Hello ftp!",
+	})}
+	ts := ftptest.NewUnstartedServer(fs)
+	ts.Config.Logger = testLogger{t}
+	ts.Start()
+	defer ts.Close()
+
+	u, err := url.Parse(ts.URL)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// call the Shutdown method during the tests,
+	shutdownRes := make(chan error, 1)
+	go func() {
+		time.Sleep(time.Second)
+		shutdownRes <- ts.Config.Shutdown(context.Background())
+	}()
+
+	// but the tests will succeed, because the Shutdown is graceful.
+	script := `use utf8;
+use strict;
+use warnings;
+use Test::More;
+use Net::FTP;
+
+my $host = shift;
+my $ftp = Net::FTP->new($host, Debug => 1) or die "fail to connect ftp server: $@";
+ok $ftp->login('anonymous', 'foobar@example.com'), 'login';
+
+my $result = "";
+open my $fh, ">", \$result;
+ok $ftp->get('testfile', $fh), 'get'; # it takes 2 seconds.
+is $result, "Hello ftp!";
+ok $ftp->quit(), 'quit';
+done_testing;
+`
+	perl.Prove(ctx, t, script, u.Host)
+
+	if err := <-shutdownRes; err != nil {
+		t.Error(err)
+	}
+}
+
+type delayedFS struct {
+	vfs.FileSystem
+}
+
+func (fs delayedFS) Open(ctx context.Context, name string) (io.ReadCloser, error) {
+	r, err := fs.FileSystem.Open(ctx, name)
+	if err != nil {
+		return nil, err
+	}
+	return delayedReader{r}, nil
+}
+
+type delayedReader struct {
+	io.ReadCloser
+}
+
+func (r delayedReader) Read(p []byte) (int, error) {
+	time.Sleep(3 * time.Second)
+	return r.ReadCloser.Read(p)
 }
 
 type testLogger struct {
