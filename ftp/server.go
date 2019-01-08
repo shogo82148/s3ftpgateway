@@ -352,6 +352,16 @@ func (s *Server) closeConnsLocked() error {
 	return err
 }
 
+func (s *Server) shutdownConnsLocked() error {
+	var err error
+	for c := range s.conns {
+		if cerr := c.shutdown(); cerr != nil && err == nil {
+			err = cerr
+		}
+	}
+	return err
+}
+
 // Close immediately closes all active net.Listeners and any connections.
 func (s *Server) Close() error {
 	s.shuttingDown.setTrue()
@@ -377,11 +387,27 @@ func (s *Server) Close() error {
 func (s *Server) Shutdown(ctx context.Context) error {
 	s.shuttingDown.setTrue()
 	s.mu.Lock()
-	defer s.mu.Unlock()
 	s.closeDoneChanLocked()
 	s.closeListenersLocked()
-	// TODO: wait for all transfers are done.
-	return nil
+	s.shutdownConnsLocked()
+	s.mu.Unlock()
+
+	ticker := time.NewTicker(500 * time.Millisecond)
+	defer ticker.Stop()
+	for {
+		var cnt int
+		s.mu.Lock()
+		cnt = len(s.conns)
+		s.mu.Unlock()
+		if cnt == 0 {
+			return nil
+		}
+		select {
+		case <-ctx.Done():
+			return ctx.Err()
+		case <-ticker.C:
+		}
+	}
 }
 
 func (s *Server) logger() Logger {
