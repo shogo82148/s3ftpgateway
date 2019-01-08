@@ -35,6 +35,14 @@ type Config struct {
 	// EnableAddressCheck enables checking address of data connection peer.
 	// The checking is enabled by default to avoid the bounce attack.
 	EnableAddressCheck bool `yaml:"enable_address_check"`
+
+	// Certificate is a file path for certificate public key.
+	// The file must contain PEM encoded data.
+	Certificate string `yaml:"certificate"`
+
+	// CertificateKey is a file path for certificate private key.
+	// The file must contain PEM encoded data.
+	CertificateKey string `yaml:"certificate_key"`
 }
 
 // ListenrConfig is a configure of listener.
@@ -44,14 +52,6 @@ type ListenrConfig struct {
 
 	// TLS enables implicit tls mode.
 	TLS bool `yaml:"tls"`
-
-	// Certificate is a file path for certificate public key.
-	// The file must contain PEM encoded data.
-	Certificate string `yaml:"certificate"`
-
-	// CertificateKey is a file path for certificate private key.
-	// The file must contain PEM encoded data.
-	CertificateKey string `yaml:"certificate_key"`
 }
 
 // LogConfig is the config for log.
