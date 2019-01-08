@@ -23,6 +23,7 @@ type atomicBool int32
 
 func (b *atomicBool) isSet() bool { return atomic.LoadInt32((*int32)(b)) != 0 }
 func (b *atomicBool) setTrue()    { atomic.StoreInt32((*int32)(b), 1) }
+func (b *atomicBool) setFalse()   { atomic.StoreInt32((*int32)(b), 0) }
 
 // A Server defines patameters for running a FTP server.
 type Server struct {
@@ -362,6 +363,20 @@ func (s *Server) shutdownConnsLocked() error {
 	return err
 }
 
+func (s *Server) closeIdleConns() bool {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	quiescent := true
+	for c := range s.conns {
+		if c.closeIfIdle() {
+			delete(s.conns, c)
+		} else {
+			quiescent = false
+		}
+	}
+	return quiescent
+}
+
 // Close immediately closes all active net.Listeners and any connections.
 func (s *Server) Close() error {
 	s.shuttingDown.setTrue()
@@ -395,11 +410,7 @@ func (s *Server) Shutdown(ctx context.Context) error {
 	ticker := time.NewTicker(200 * time.Millisecond)
 	defer ticker.Stop()
 	for {
-		var cnt int
-		s.mu.Lock()
-		cnt = len(s.conns)
-		s.mu.Unlock()
-		if cnt == 0 {
+		if s.closeIdleConns() {
 			return nil
 		}
 		select {

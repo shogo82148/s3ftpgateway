@@ -1068,6 +1068,118 @@ done_testing;
 	}
 }
 
+func TestShutdown_DuringExecutingCommand(t *testing.T) {
+	perl, err := newPerlExecutor()
+	if err != nil {
+		t.Skipf("perl is required for this test: %v", err)
+		return
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+
+	fs := delayedFS{mapfs.New(map[string]string{
+		"testfile": "Hello ftp!",
+	})}
+	ts := ftptest.NewUnstartedServer(fs)
+	ts.Config.Logger = testLogger{t}
+	ts.Start()
+	defer ts.Close()
+
+	u, err := url.Parse(ts.URL)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// call the Shutdown method during the tests,
+	shutdownRes := make(chan error, 1)
+	go func() {
+		time.Sleep(time.Second)
+		ctx, cancel := context.WithTimeout(ctx, 2*time.Second)
+		defer cancel()
+		shutdownRes <- ts.Config.Shutdown(ctx)
+	}()
+
+	// but the tests will succeed, because the Shutdown is graceful.
+	script := `use utf8;
+use strict;
+use warnings;
+use Test::More;
+use Net::FTP;
+
+my $host = shift;
+my $ftp = Net::FTP->new($host, Debug => 1) or die "fail to connect ftp server: $@";
+ok $ftp->login('anonymous', 'foobar@example.com'), 'login';
+
+# shutdown while running size.
+ok $ftp->size('testfile'), 'size';
+
+is $ftp->quot('NOOP'), 5, 'control connection is closed.';
+done_testing;
+`
+	perl.Prove(ctx, t, script, u.Host)
+
+	if err := <-shutdownRes; err != nil {
+		t.Error(err)
+	}
+}
+
+func TestShutdown_BeforeCommand(t *testing.T) {
+	perl, err := newPerlExecutor()
+	if err != nil {
+		t.Skipf("perl is required for this test: %v", err)
+		return
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+
+	fs := delayedFS{mapfs.New(map[string]string{
+		"testfile": "Hello ftp!",
+	})}
+	ts := ftptest.NewUnstartedServer(fs)
+	ts.Config.Logger = testLogger{t}
+	ts.Start()
+	defer ts.Close()
+
+	u, err := url.Parse(ts.URL)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// call the Shutdown method during the tests,
+	shutdownRes := make(chan error, 1)
+	go func() {
+		time.Sleep(time.Second)
+		ctx, cancel := context.WithTimeout(ctx, 2*time.Second)
+		defer cancel()
+		shutdownRes <- ts.Config.Shutdown(ctx)
+	}()
+
+	// but the tests will succeed, because the Shutdown is graceful.
+	script := `use utf8;
+use strict;
+use warnings;
+use Test::More;
+use Net::FTP;
+
+my $host = shift;
+my $ftp = Net::FTP->new($host, Debug => 1) or die "fail to connect ftp server: $@";
+ok $ftp->login('anonymous', 'foobar@example.com'), 'login';
+
+# shutdown while sleep...
+sleep 2;
+
+is $ftp->quot('NOOP'), 5, 'control connection is closed.';
+done_testing;
+`
+	perl.Prove(ctx, t, script, u.Host)
+
+	if err := <-shutdownRes; err != nil {
+		t.Error(err)
+	}
+}
+
 type delayedFS struct {
 	vfs.FileSystem
 }
@@ -1078,6 +1190,16 @@ func (fs delayedFS) Open(ctx context.Context, name string) (io.ReadCloser, error
 		return nil, err
 	}
 	return &delayedReader{ReadCloser: r}, nil
+}
+
+func (fs delayedFS) Lstat(ctx context.Context, path string) (os.FileInfo, error) {
+	time.Sleep(2 * time.Second)
+	return fs.FileSystem.Lstat(ctx, path)
+}
+
+func (fs delayedFS) Stat(ctx context.Context, path string) (os.FileInfo, error) {
+	time.Sleep(2 * time.Second)
+	return fs.FileSystem.Lstat(ctx, path)
 }
 
 type delayedReader struct {

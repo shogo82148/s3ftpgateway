@@ -38,6 +38,7 @@ type ServerConn struct {
 	ctrl    *dumbTelnetConn
 	scanner *bufio.Scanner
 
+	executing    atomicBool
 	shuttingDown atomicBool
 	closeOnce    sync.Once
 	closeErr     error
@@ -61,9 +62,8 @@ type ServerConn struct {
 	rmfrReader io.ReadCloser
 
 	// a connector for data connection
-	mudt          sync.Mutex // guard dt
-	dt            dataTransfer
-	lastExecution time.Time
+	mudt sync.Mutex // guard dt
+	dt   dataTransfer
 
 	// use EPSV command for starting data connection.
 	// if it is true, reject all data connection
@@ -95,33 +95,27 @@ func (c *ServerConn) serve() {
 		}
 	}()
 
-	c.updateLastExecution()
 	c.WriteReply(StatusReady, "Service ready")
 
-	for c.scanner.Scan() && !c.shuttingDown.isSet() {
+	for !c.shuttingDown.isSet() && c.scanner.Scan() {
+		c.executing.setTrue()
 		text := c.scanner.Text()
 		if c.shuttingDown.isSet() {
 			c.WriteReply(StatusNotAvailable, "Service not available, closing control connection.")
 			break
 		}
-		c.updateLastExecution()
 		cmd, err := ParseCommand(text)
 		if err != nil {
 			c.WriteReply(StatusBadCommand, "Syntax error.")
 			continue
 		}
 		c.execCommand(cmd)
+		c.executing.setFalse()
 	}
 	if err := c.scanner.Err(); err != nil {
 		c.server.logger().Printf(c.sessionID, "error reading the control connection: %v", err)
 	}
 	c.server.logger().Print(c.sessionID, "closing the connection")
-}
-
-func (c *ServerConn) updateLastExecution() {
-	c.mudt.Lock()
-	defer c.mudt.Unlock()
-	c.lastExecution = time.Now()
 }
 
 func (c *ServerConn) execCommand(cmd *Command) {
@@ -253,20 +247,36 @@ func (c *ServerConn) close() {
 
 // Shutdown wait for transfer and closes the connection.
 func (c *ServerConn) Shutdown(ctx context.Context) error {
-	err := c.shutdown()
-	select {
-	case <-c.ctx.Done():
+	if err := c.shutdown(); err != nil {
 		return err
-	case <-ctx.Done():
-		return ctx.Err()
 	}
+	ticker := time.NewTicker(200 * time.Millisecond)
+	defer ticker.Stop()
+	for {
+		if c.closeIfIdle() {
+			return nil
+		}
+		select {
+		case <-ctx.Done():
+			return ctx.Err()
+		case <-ticker.C:
+		}
+	}
+}
+
+func (c *ServerConn) closeIfIdle() bool {
+	if c.executing.isSet() {
+		return false
+	}
+	c.Close()
+	return true
 }
 
 func (c *ServerConn) shutdown() error {
 	c.shuttingDown.setTrue()
 	c.mudt.Lock()
 	defer c.mudt.Unlock()
-	if _, ok := c.dt.(emptyDataTransfer); ok && time.Now().Sub(c.lastExecution) > 5*time.Second {
+	if _, ok := c.dt.(emptyDataTransfer); ok && !c.executing.isSet() {
 		return c.rwc.Close()
 	}
 	return nil
