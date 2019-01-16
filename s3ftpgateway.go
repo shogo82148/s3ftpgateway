@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"crypto/tls"
 	"net"
 	"os"
 	"os/signal"
@@ -47,9 +48,17 @@ func Serve(config *Config) {
 		logrus.WithError(err).Fatal("fail to parse s3ftpgateway config")
 	}
 
+	cert, err := loadCertificate(config)
+	if err != nil {
+		logrus.WithError(err).Fatal("fail to load certificate")
+	}
+
 	s := &ftp.Server{
-		FileSystem:          fs,
-		Authorizer:          auth,
+		FileSystem: fs,
+		Authorizer: auth,
+		TLSConfig: &tls.Config{
+			Certificates: []tls.Certificate{cert},
+		},
 		MinPassivePort:      config.MinPassivePort,
 		MaxPassivePort:      config.MaxPassivePort,
 		PublicIPs:           config.PublicIPs,
@@ -200,4 +209,8 @@ func (ln tcpKeepAliveListener) Accept() (net.Conn, error) {
 	tc.SetKeepAlive(true)
 	tc.SetKeepAlivePeriod(3 * time.Minute)
 	return tc, nil
+}
+
+func loadCertificate(config *Config) (tls.Certificate, error) {
+	return tls.LoadX509KeyPair(config.Certificate, config.CertificateKey)
 }
