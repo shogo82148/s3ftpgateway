@@ -2,18 +2,25 @@ package main
 
 import (
 	"flag"
+	"runtime"
 
 	"github.com/sirupsen/logrus"
 )
 
 var config string
+var showVersion bool
 
 func init() {
 	flag.StringVar(&config, "config", "", "the path to the configure file")
+	flag.BoolVar(&showVersion, "version", false, "show the version")
 }
 
 func main() {
 	flag.Parse()
+	if showVersion {
+		logrus.Printf("version %s %s %s build with %s", Version, runtime.GOOS, runtime.GOARCH, runtime.Version())
+		return
+	}
 	if config == "" {
 		logrus.Fatal("-config is missing.")
 	}
