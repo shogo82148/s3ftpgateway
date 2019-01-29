@@ -8,7 +8,7 @@ require (
 	github.com/jtolds/gls v4.2.1+incompatible // indirect
 	github.com/pkg/errors v0.8.1 // indirect
 	github.com/shogo82148/go-tap v0.0.1
-	github.com/shogo82148/server-starter v0.0.1
+	github.com/shogo82148/server-starter v0.0.2
 	github.com/sirupsen/logrus v1.3.0
 	github.com/smartystreets/assertions v0.0.0-20180927180507-b2de0cb4f26d // indirect
 	github.com/smartystreets/goconvey v0.0.0-20181108003508-044398e4856c // indirect
