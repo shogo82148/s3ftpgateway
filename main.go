@@ -2,6 +2,7 @@ package main
 
 import (
 	"flag"
+	"fmt"
 	"runtime"
 
 	"github.com/sirupsen/logrus"
@@ -18,7 +19,7 @@ func init() {
 func main() {
 	flag.Parse()
 	if showVersion {
-		logrus.Printf("version %s %s %s build with %s", Version, runtime.GOOS, runtime.GOARCH, runtime.Version())
+		fmt.Printf("version %s %s %s build with %s", Version, runtime.GOOS, runtime.GOARCH, runtime.Version())
 		return
 	}
 	if config == "" {
