@@ -3,9 +3,12 @@ package main
 import (
 	"context"
 	"crypto/tls"
+	"io"
 	"net"
+	"net/http"
 	"os"
 	"os/signal"
+	"strings"
 	"syscall"
 	"time"
 
@@ -25,6 +28,22 @@ func Serve(config *Config) {
 		logrus.SetFormatter(&logrus.JSONFormatter{})
 	default:
 		logrus.Fatalf("unknown log format: %s", config.Log.Format)
+	}
+
+	if config.GuessPublicIP {
+		ip1 := make(chan string, 1)
+		ip2 := make(chan string, 1)
+		go func() {
+			ip1 <- guessPublicIPFromMetaData(context.Background())
+		}()
+		go func() {
+			ip2 <- guessPublicIPFromCheckIP(context.Background())
+		}()
+		if ip := <-ip1; ip != "" {
+			config.PublicIPs = []string{ip}
+		} else if ip := <-ip2; ip != "" {
+			config.PublicIPs = []string{ip}
+		}
 	}
 
 	ls, err := listeners(config)
@@ -213,4 +232,58 @@ func (ln tcpKeepAliveListener) Accept() (net.Conn, error) {
 
 func loadCertificate(config *Config) (tls.Certificate, error) {
 	return tls.LoadX509KeyPair(config.Certificate, config.CertificateKey)
+}
+
+// guessPublicIPFromMetaData guesses Public IP address from EC2 instance meta data.
+func guessPublicIPFromMetaData(ctx context.Context) string {
+	ctx, cancel := context.WithTimeout(ctx, 5*time.Second)
+	defer cancel()
+
+	req, err := http.NewRequest(http.MethodGet, "http://169.254.169.254/latest/meta-data/public-ipv4", nil)
+	if err != nil {
+		return ""
+	}
+	req = req.WithContext(ctx)
+
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		return ""
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		return ""
+	}
+	var builer strings.Builder
+	if _, err := io.Copy(&builer, resp.Body); err != nil {
+		return ""
+	}
+	return strings.TrimSpace(builer.String())
+}
+
+// guessPublicIPFromCheckIP guesses Public IP address from checkip.amazonaws.com
+func guessPublicIPFromCheckIP(ctx context.Context) string {
+	ctx, cancel := context.WithTimeout(ctx, 5*time.Second)
+	defer cancel()
+
+	req, err := http.NewRequest(http.MethodGet, "https://checkip.amazonaws.com", nil)
+	if err != nil {
+		return ""
+	}
+	req = req.WithContext(ctx)
+
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		return ""
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		return ""
+	}
+	var builer strings.Builder
+	if _, err := io.Copy(&builer, resp.Body); err != nil {
+		return ""
+	}
+	return strings.TrimSpace(builer.String())
 }

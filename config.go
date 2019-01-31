@@ -27,6 +27,12 @@ type Config struct {
 	// PublicIPs are public IPs.
 	PublicIPs []string `yaml:"public_ips"`
 
+	// GuessPublicIP enables guessing public IP address.
+	// It is for severs behind NAT, such as EC2.
+	// s3ftpgateway uses http://169.254.169.254/latest/meta-data/public-ipv4 and,
+	// https://checkip.amazonaws.com for guessing IP address.
+	GuessPublicIP bool `yaml:"guess_public_ip"`
+
 	// EnableActiveMode enables active transfer mode.
 	// PORT and EPRT commands are disabled by default,
 	// because it has some security risk, and most clients use passive mode.
