@@ -55,7 +55,16 @@ func (fs *FileSystem) s3() s3iface.S3API {
 	defer fs.mu.Unlock()
 
 	if fs.s3api == nil {
-		fs.s3api = s3.New(fs.Config)
+		cfg := fs.Config
+		if cfg.Region == "" {
+			region, err := s3manager.GetBucketRegion(context.Background(), fs.Config, fs.Bucket, "us-west-2")
+			if err != nil {
+				panic(err)
+			}
+			cfg = cfg.Copy()
+			cfg.Region = region
+		}
+		fs.s3api = s3.New(cfg)
 	}
 	return fs.s3api
 }
@@ -65,7 +74,16 @@ func (fs *FileSystem) uploader() s3manageriface.UploaderAPI {
 	defer fs.mu.Unlock()
 
 	if fs.uploaderapi == nil {
-		fs.uploaderapi = s3manager.NewUploader(fs.Config)
+		cfg := fs.Config
+		if cfg.Region == "" {
+			region, err := s3manager.GetBucketRegion(context.Background(), fs.Config, fs.Bucket, "us-west-2")
+			if err != nil {
+				panic(err)
+			}
+			cfg = cfg.Copy()
+			cfg.Region = region
+		}
+		fs.uploaderapi = s3manager.NewUploader(cfg)
 	}
 	return fs.uploaderapi
 }
