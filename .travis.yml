@@ -3,9 +3,10 @@ env:
   - GO111MODULE=on
 go:
   - '1.11.x'
+  - '1.12.x'
 os:
   - linux
   - osx
-  # - windows # go get fails on windows. why??? https://travis-ci.com/shogo82148/s3ftpgateway/jobs/166842634
+  - windows
 
 script: make test
