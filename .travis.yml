@@ -9,4 +9,4 @@ os:
   - osx
   - windows
 
-script: make test
+script: go test -v -race ./...
