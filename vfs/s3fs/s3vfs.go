@@ -27,7 +27,7 @@ type FileSystem struct {
 	Prefix string
 
 	mu          sync.Mutex
-	s3api       s3iface.S3API
+	s3api       s3iface.ClientAPI
 	uploaderapi s3manageriface.UploaderAPI
 }
 
@@ -50,7 +50,7 @@ func filename(p string) string {
 	return strings.TrimPrefix(pathpkg.Clean(p), "/")
 }
 
-func (fs *FileSystem) s3() s3iface.S3API {
+func (fs *FileSystem) s3() s3iface.ClientAPI {
 	fs.mu.Lock()
 	defer fs.mu.Unlock()
 
@@ -95,8 +95,7 @@ func (fs *FileSystem) Open(ctx context.Context, name string) (io.ReadCloser, err
 		Bucket: aws.String(fs.Bucket),
 		Key:    aws.String(fs.filekey(name)),
 	})
-	req.SetContext(ctx)
-	resp, err := req.Send()
+	resp, err := req.Send(ctx)
 	if err != nil {
 		if err, ok := err.(awserr.RequestFailure); ok {
 			switch err.StatusCode() {
@@ -140,8 +139,7 @@ func (fs *FileSystem) Lstat(ctx context.Context, path string) (os.FileInfo, erro
 		Delimiter: aws.String("/"),
 		MaxKeys:   aws.Int64(1),
 	})
-	req.SetContext(ctx)
-	resp, err := req.Send()
+	resp, err := req.Send(ctx)
 	if err != nil {
 		if err, ok := err.(awserr.RequestFailure); ok {
 			switch err.StatusCode() {
@@ -247,10 +245,9 @@ func (fs *FileSystem) ReadDir(ctx context.Context, path string) ([]os.FileInfo, 
 		Delimiter: aws.String("/"),
 		MaxKeys:   &maxKeys,
 	})
-	req.SetContext(ctx)
-	pager := req.Paginate()
+	pager := s3.NewListObjectsV2Paginator(req)
 	res := []os.FileInfo{}
-	for pager.Next() {
+	for pager.Next(ctx) {
 		// merge Contents and CommonPrefixes
 		resp := pager.CurrentPage()
 		contents := resp.Contents
@@ -357,8 +354,7 @@ func (fs *FileSystem) Mkdir(ctx context.Context, name string) error {
 		Key:    aws.String(fs.dirkey(name)),
 		Body:   strings.NewReader(""),
 	})
-	req.SetContext(ctx)
-	if _, err := req.Send(); err != nil {
+	if _, err := req.Send(ctx); err != nil {
 		return &os.PathError{
 			Op:   "mkdir",
 			Path: filename(name),
@@ -383,8 +379,7 @@ func (fs *FileSystem) Remove(ctx context.Context, name string) error {
 			Prefix:  aws.String(fs.dirkey(name)),
 			MaxKeys: aws.Int64(1),
 		})
-		req.SetContext(ctx)
-		resp, err := req.Send()
+		resp, err := req.Send(ctx)
 		if err != nil {
 			return &os.PathError{
 				Op:   "remove",
@@ -405,8 +400,7 @@ func (fs *FileSystem) Remove(ctx context.Context, name string) error {
 		Bucket: aws.String(fs.Bucket),
 		Key:    aws.String(fs.filekey(name)),
 	})
-	req.SetContext(ctx)
-	if _, err := req.Send(); err != nil {
+	if _, err := req.Send(ctx); err != nil {
 		return &os.PathError{
 			Op:   "remove",
 			Path: filename(name),
