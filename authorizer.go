@@ -9,8 +9,8 @@ import (
 	"golang.org/x/crypto/bcrypt"
 )
 
-// NewAuhtorizer returns new authorizer.
-func NewAuhtorizer(config AuthorizerConfig) (ftp.Authorizer, error) {
+// NewAuthorizer returns new authorizer.
+func NewAuthorizer(config AuthorizerConfig) (ftp.Authorizer, error) {
 	switch config.Method {
 	case "userlist":
 		return newUserListAuthorizer(config.Config)

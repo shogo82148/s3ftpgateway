@@ -62,7 +62,7 @@ func Serve(config *Config) {
 		Prefix: config.Prefix,
 	}
 
-	auth, err := NewAuhtorizer(config.Authorizer)
+	auth, err := NewAuthorizer(config.Authorizer)
 	if err != nil {
 		logrus.WithError(err).Fatal("fail to parse s3ftpgateway config")
 	}
