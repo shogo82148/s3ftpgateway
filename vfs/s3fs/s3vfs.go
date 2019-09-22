@@ -37,7 +37,7 @@ func (fs *FileSystem) filekey(name string) string {
 	return strings.TrimPrefix(pathpkg.Join(fs.Prefix, name), "/")
 }
 
-// dirkey converts the name to the key value for directries on the S3 bucket.
+// dirkey converts the name to the key value for directories on the S3 bucket.
 func (fs *FileSystem) dirkey(name string) string {
 	name = fs.filekey(name)
 	if name == "" {

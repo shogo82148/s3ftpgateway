@@ -211,7 +211,7 @@ func TestLstat(t *testing.T) {
 			t.Errorf("want 6, got %d", info.Size())
 		}
 		if info.IsDir() {
-			t.Error("want not dirctory, but it is")
+			t.Error("want not directory, but it is")
 		}
 	})
 
@@ -234,7 +234,7 @@ func TestLstat(t *testing.T) {
 			t.Errorf("want foo.txt, got %s", info.Name())
 		}
 		if !info.IsDir() {
-			t.Error("want dirctory, but it is not")
+			t.Error("want directory, but it is not")
 		}
 	})
 }
