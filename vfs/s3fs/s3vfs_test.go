@@ -51,23 +51,27 @@ func newTestFileSystem(t *testing.T) (*FileSystem, func()) {
 	chDel := make(chan string, 5)
 	wg.Add(1)
 	go func() {
+		ctx, cancel := context.WithCancel(context.Background())
+		defer cancel()
 		for key := range chDel {
 			req := svc.DeleteObjectRequest(&s3.DeleteObjectInput{
 				Bucket: aws.String(bucket),
 				Key:    aws.String(key),
 			})
-			req.Send()
+			req.Send(ctx)
 		}
 		wg.Done()
 	}()
 
 	return fs, func() {
+		ctx, cancel := context.WithCancel(context.Background())
+		defer cancel()
 		req := svc.ListObjectsV2Request(&s3.ListObjectsV2Input{
 			Bucket: aws.String(bucket),
 			Prefix: aws.String(prefix + "/"),
 		})
-		pager := req.Paginate()
-		for pager.Next() {
+		pager := s3.NewListObjectsV2Paginator(req)
+		for pager.Next(ctx) {
 			resp := pager.CurrentPage()
 			for _, v := range resp.Contents {
 				chDel <- aws.StringValue(v.Key)
@@ -131,8 +135,7 @@ func TestOpen(t *testing.T) {
 			Key:    aws.String(fmt.Sprintf("%s/foo.txt", fs.Prefix)),
 			Body:   strings.NewReader("abc123"),
 		})
-		req.SetContext(ctx)
-		if _, err := req.Send(); err != nil {
+		if _, err := req.Send(ctx); err != nil {
 			t.Error(err)
 			return
 		}
@@ -166,8 +169,7 @@ func TestLstat(t *testing.T) {
 			Key:    aws.String(fmt.Sprintf("%s/not-found ", fs.Prefix)),
 			Body:   strings.NewReader("abc123"),
 		})
-		req.SetContext(ctx)
-		if _, err := req.Send(); err != nil {
+		if _, err := req.Send(ctx); err != nil {
 			t.Error(err)
 			return
 		}
@@ -176,8 +178,7 @@ func TestLstat(t *testing.T) {
 			Key:    aws.String(fmt.Sprintf("%s/not-found  /", fs.Prefix)),
 			Body:   strings.NewReader("abc123"),
 		})
-		req.SetContext(ctx)
-		if _, err := req.Send(); err != nil {
+		if _, err := req.Send(ctx); err != nil {
 			t.Error(err)
 			return
 		}
@@ -194,8 +195,7 @@ func TestLstat(t *testing.T) {
 			Key:    aws.String(fmt.Sprintf("%s/foo.txt", fs.Prefix)),
 			Body:   strings.NewReader("abc123"),
 		})
-		req.SetContext(ctx)
-		if _, err := req.Send(); err != nil {
+		if _, err := req.Send(ctx); err != nil {
 			t.Error(err)
 			return
 		}
@@ -221,8 +221,7 @@ func TestLstat(t *testing.T) {
 			Key:    aws.String(fmt.Sprintf("%s/bar/foo.txt", fs.Prefix)),
 			Body:   strings.NewReader("abc123"),
 		})
-		req.SetContext(ctx)
-		if _, err := req.Send(); err != nil {
+		if _, err := req.Send(ctx); err != nil {
 			t.Error(err)
 			return
 		}
@@ -255,8 +254,7 @@ func TestReadDir(t *testing.T) {
 			Key:    aws.String(fmt.Sprintf("%s/bar/foo1.txt", fs.Prefix)),
 			Body:   strings.NewReader("abc123"),
 		})
-		req.SetContext(ctx)
-		if _, err := req.Send(); err != nil {
+		if _, err := req.Send(ctx); err != nil {
 			t.Error(err)
 			return
 		}
@@ -265,8 +263,7 @@ func TestReadDir(t *testing.T) {
 			Key:    aws.String(fmt.Sprintf("%s/bar/foo2.txt", fs.Prefix)),
 			Body:   strings.NewReader("abc123"),
 		})
-		req.SetContext(ctx)
-		if _, err := req.Send(); err != nil {
+		if _, err := req.Send(ctx); err != nil {
 			t.Error(err)
 			return
 		}
@@ -275,8 +272,7 @@ func TestReadDir(t *testing.T) {
 			Key:    aws.String(fmt.Sprintf("%s/foobar.txt", fs.Prefix)),
 			Body:   strings.NewReader("abc123"),
 		})
-		req.SetContext(ctx)
-		if _, err := req.Send(); err != nil {
+		if _, err := req.Send(ctx); err != nil {
 			t.Error(err)
 			return
 		}
@@ -315,8 +311,7 @@ func TestCreate(t *testing.T) {
 			Bucket: aws.String(fs.Bucket),
 			Key:    aws.String(fmt.Sprintf("%s/foobar.txt", fs.Prefix)),
 		})
-		req.SetContext(ctx)
-		resp, err := req.Send()
+		resp, err := req.Send(ctx)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -359,8 +354,7 @@ func TestCreate(t *testing.T) {
 			Key:    aws.String(fmt.Sprintf("%s/foobar/hoge.txt", fs.Prefix)),
 			Body:   strings.NewReader("abc123"),
 		})
-		req.SetContext(ctx)
-		if _, err := req.Send(); err != nil {
+		if _, err := req.Send(ctx); err != nil {
 			t.Error(err)
 			return
 		}
@@ -388,8 +382,7 @@ func TestMkdir(t *testing.T) {
 			Bucket: aws.String(fs.Bucket),
 			Key:    aws.String(fmt.Sprintf("%s/foobar/", fs.Prefix)),
 		})
-		req.SetContext(ctx)
-		resp, err := req.Send()
+		resp, err := req.Send(ctx)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -405,8 +398,7 @@ func TestMkdir(t *testing.T) {
 			Key:    aws.String(fmt.Sprintf("%s/foobar/hoge.txt", fs.Prefix)),
 			Body:   strings.NewReader("abc123"),
 		})
-		req.SetContext(ctx)
-		if _, err := req.Send(); err != nil {
+		if _, err := req.Send(ctx); err != nil {
 			t.Error(err)
 			return
 		}
@@ -430,8 +422,7 @@ func TestRemove(t *testing.T) {
 			Key:    aws.String(fmt.Sprintf("%s/foobar.txt", fs.Prefix)),
 			Body:   strings.NewReader("abc123"),
 		})
-		req.SetContext(ctx)
-		if _, err := req.Send(); err != nil {
+		if _, err := req.Send(ctx); err != nil {
 			t.Error(err)
 			return
 		}
@@ -459,8 +450,7 @@ func TestRemove(t *testing.T) {
 			Key:    aws.String(fmt.Sprintf("%s/foobar/hoge.txt", fs.Prefix)),
 			Body:   strings.NewReader("abc123"),
 		})
-		req.SetContext(ctx)
-		if _, err := req.Send(); err != nil {
+		if _, err := req.Send(ctx); err != nil {
 			t.Error(err)
 			return
 		}
