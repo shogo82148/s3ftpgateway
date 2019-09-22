@@ -13,7 +13,7 @@ type Logger interface {
 	PrintResponse(sessionID string, code int, message string)
 }
 
-// StdLogger logs uging the logger package.
+// StdLogger logs using the logger package.
 var StdLogger Logger = stdLogger{}
 
 type stdLogger struct{}

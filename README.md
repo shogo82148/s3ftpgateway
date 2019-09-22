@@ -30,7 +30,7 @@ For an english summary that's somewhat more legible than the RFCs, and provides 
 ## TELNET
 
 FTP is based on TELNET.
-So, I recommand you to understand TELNET PROTOCOL.
+So, I recommend you to understand TELNET PROTOCOL.
 
 - [RFC884](https://tools.ietf.org/html/rfc884) TELNET TERMINAL TYPE OPTION
 - [RFC855](https://tools.ietf.org/html/rfc855) TELNET OPTION SPECIFICATIONS

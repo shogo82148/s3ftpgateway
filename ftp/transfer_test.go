@@ -38,7 +38,7 @@ func TestServerConn_newPassiveDataTransfer(t *testing.T) {
 			break
 		}
 		if i >= 5 {
-			t.Errorf("cannot asign test port: %s", err)
+			t.Errorf("cannot assign test port: %s", err)
 			return
 		}
 	}

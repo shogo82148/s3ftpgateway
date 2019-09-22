@@ -102,7 +102,7 @@ func (c *dumbTelnetConn) ignoreSubnegotiation() error {
 		return err
 	}
 
-	// Search IAC SE sequense
+	// Search IAC SE sequence
 	foundIac := false
 	for {
 		code, err := c.r.ReadByte()

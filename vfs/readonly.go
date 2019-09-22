@@ -76,5 +76,5 @@ type readonlyStat struct {
 }
 
 func (stat readonlyStat) Mode() os.FileMode {
-	return stat.FileInfo.Mode() &^ 222
+	return stat.FileInfo.Mode() &^ 0222
 }

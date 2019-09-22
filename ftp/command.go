@@ -1224,7 +1224,7 @@ func (commandLang) FeatureParam() string { return "EN*" }
 func (commandLang) Execute(ctx context.Context, c *ServerConn, cmd *Command) {
 	args := strings.Split(cmd.Arg, "-")
 	if len(args) < 1 {
-		c.WriteReply(StatusBadArguments, "Syntax error in patameter.")
+		c.WriteReply(StatusBadArguments, "Syntax error in parameter.")
 		return
 	}
 	if !strings.EqualFold(args[0], "en") {
@@ -1338,12 +1338,12 @@ func formatMachineListings(stat os.FileInfo) string {
 	fmt.Fprintf(&builder, "Size=%d;", stat.Size())
 
 	builder.WriteString("Perm=")
-	isdir := stat.IsDir()
+	isDir := stat.IsDir()
 	mode := stat.Mode()
-	if !isdir && (mode&0600) == 0600 {
+	if !isDir && (mode&0600) == 0600 {
 		builder.WriteRune('a') //  the APPE (append) command may be applied
 	}
-	if isdir && (mode&0200) == 0200 {
+	if isDir && (mode&0200) == 0200 {
 		// files may be created in the directory
 		// the MKD command may be used to create a new directory
 		builder.WriteString("cmp")
@@ -1353,19 +1353,19 @@ func formatMachineListings(stat os.FileInfo) string {
 		// the object named may be renamed
 		builder.WriteString("df")
 	}
-	if isdir && (mode&0100) == 0100 {
+	if isDir && (mode&0100) == 0100 {
 		// that a CWD command naming the object should succeed
 		builder.WriteString("e")
 	}
-	if isdir && (mode&0400) == 0400 {
+	if isDir && (mode&0400) == 0400 {
 		// he listing commands may be applied to the directory
 		builder.WriteString("l")
 	}
-	if !isdir && (mode&0400) == 0400 {
+	if !isDir && (mode&0400) == 0400 {
 		// the RETR command may be applied to that object
 		builder.WriteString("r")
 	}
-	if !isdir && (mode&0200) == 0200 {
+	if !isDir && (mode&0200) == 0200 {
 		// the STOR command may be applied to that object
 		builder.WriteString("w")
 	}

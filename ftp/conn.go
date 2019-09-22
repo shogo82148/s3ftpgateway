@@ -228,7 +228,7 @@ func (c *ServerConn) fileSystem() vfs.FileSystem {
 	return fs
 }
 
-// Close closes all connections inluding the data transfer connection.
+// Close closes all connections including the data transfer connection.
 func (c *ServerConn) Close() error {
 	c.cancel()
 	c.closeOnce.Do(c.close)

@@ -153,7 +153,7 @@ func TestServer_ExplicitTLS_EPSV(t *testing.T) {
 	if runtime.GOOS != "windows" {
 		args = append(args, "--cacert", cert)
 	} else {
-		// curl does not accpect --cacert option in windows, why???
+		// curl does not accept --cacert option in windows, why???
 		args = append(args, "-k")
 	}
 
@@ -199,7 +199,7 @@ func TestServer_ExplicitTLS_EPRT(t *testing.T) {
 	if runtime.GOOS != "windows" {
 		args = append(args, "--cacert", cert)
 	} else {
-		// curl does not accpect --cacert option in windows, why???
+		// curl does not accept --cacert option in windows, why???
 		args = append(args, "-k")
 	}
 
@@ -245,7 +245,7 @@ func TestServer_ImplictTLS_EPSV(t *testing.T) {
 	if runtime.GOOS != "windows" {
 		args = append(args, "--cacert", cert)
 	} else {
-		// curl does not accpect --cacert option in windows, why???
+		// curl does not accept --cacert option in windows, why???
 		args = append(args, "-k")
 	}
 
@@ -263,7 +263,7 @@ func TestServer_ImplictTLS_EPSV(t *testing.T) {
 	}
 }
 
-func TestServer_ImplictTLS_EPRT(t *testing.T) {
+func TestServer_ImplicitTLS_EPRT(t *testing.T) {
 	curl, err := exec.LookPath("curl")
 	if err != nil {
 		t.Skip("curl command not found")
@@ -291,7 +291,7 @@ func TestServer_ImplictTLS_EPRT(t *testing.T) {
 	if runtime.GOOS != "windows" {
 		args = append(args, "--cacert", cert)
 	} else {
-		// curl does not accpect --cacert option in windows, why???
+		// curl does not accept --cacert option in windows, why???
 		args = append(args, "-k")
 	}
 
