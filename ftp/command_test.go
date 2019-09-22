@@ -274,7 +274,7 @@ subtest 'anonymous' => sub {
 	ok $ftp->quit(), 'quit';
 };
 
-subtest 'proctect from Brute-force attack' => sub {
+subtest 'protect from Brute-force attack' => sub {
 	my $ftp = Net::FTP->new($host, Debug => 1) or die "fail to connect ftp server: $@";
 	my $elapsed = elapsed {
 		ok !$ftp->login('attacker', 'invalid password'), 'login failed';
@@ -1005,7 +1005,7 @@ ok $ftp->login('anonymous', 'foobar@example.com'), 'login';
 ok my $mdtm = $ftp->mdtm('foobar.txt'), 'MDTM';
 is $mdtm, -62135596800, 'January 1, year 1, 00:00:00.000000000 UTC';
 ok $ftp->quit(), 'quit';
-# done_testing;
+done_testing;
 `
 	perl.Prove(ctx, t, script, u.Host)
 }
