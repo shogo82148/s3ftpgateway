@@ -25,7 +25,7 @@ func (b *atomicBool) isSet() bool { return atomic.LoadInt32((*int32)(b)) != 0 }
 func (b *atomicBool) setTrue()    { atomic.StoreInt32((*int32)(b), 1) }
 func (b *atomicBool) setFalse()   { atomic.StoreInt32((*int32)(b), 0) }
 
-// A Server defines patameters for running a FTP server.
+// A Server defines parameters for running a FTP server.
 type Server struct {
 	// TCP address for the control connection to listen on, ":ftp" if empty.
 	Addr string

@@ -173,8 +173,8 @@ func listeners(config *Config) ([]listenerConfig, error) {
 	}
 
 	var lastErr error
-	ls := make([]listenerConfig, 0, len(config.Listenrs))
-	for _, listener := range config.Listenrs {
+	ls := make([]listenerConfig, 0, len(config.Listeners))
+	for _, listener := range config.Listeners {
 		addr := listener.Address
 		if addr == "" {
 			if listener.TLS {
@@ -254,11 +254,11 @@ func guessPublicIPFromMetaData(ctx context.Context) string {
 	if resp.StatusCode != http.StatusOK {
 		return ""
 	}
-	var builer strings.Builder
-	if _, err := io.Copy(&builer, resp.Body); err != nil {
+	var builder strings.Builder
+	if _, err := io.Copy(&builder, resp.Body); err != nil {
 		return ""
 	}
-	return strings.TrimSpace(builer.String())
+	return strings.TrimSpace(builder.String())
 }
 
 // guessPublicIPFromCheckIP guesses Public IP address from checkip.amazonaws.com
@@ -281,9 +281,9 @@ func guessPublicIPFromCheckIP(ctx context.Context) string {
 	if resp.StatusCode != http.StatusOK {
 		return ""
 	}
-	var builer strings.Builder
-	if _, err := io.Copy(&builer, resp.Body); err != nil {
+	var builder strings.Builder
+	if _, err := io.Copy(&builder, resp.Body); err != nil {
 		return ""
 	}
-	return strings.TrimSpace(builer.String())
+	return strings.TrimSpace(builder.String())
 }

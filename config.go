@@ -8,9 +8,9 @@ import (
 
 // Config is a configure of s3ftpgateway.
 type Config struct {
-	Bucket   string          `yaml:"bucket"`
-	Prefix   string          `yaml:"prefix"`
-	Listenrs []ListenrConfig `yaml:"listeners"`
+	Bucket    string           `yaml:"bucket"`
+	Prefix    string           `yaml:"prefix"`
+	Listeners []ListenerConfig `yaml:"listeners"`
 
 	Log LogConfig `yaml:"log"`
 
@@ -51,8 +51,8 @@ type Config struct {
 	CertificateKey string `yaml:"certificate_key"`
 }
 
-// ListenrConfig is a configure of listener.
-type ListenrConfig struct {
+// ListenerConfig is a configure of listener.
+type ListenerConfig struct {
 	// Address is used for listening ftp control connections.
 	Address string `yaml:"address"`
 
@@ -75,7 +75,7 @@ type AuthorizerConfig struct {
 
 // LoadConfig loads a configure file.
 func LoadConfig(path string) (*Config, error) {
-	// TODO: load confirue via http and s3
+	// TODO: load configure via http and s3
 
 	conf := Config{
 		EnableAddressCheck: true,

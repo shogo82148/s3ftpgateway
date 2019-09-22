@@ -21,7 +21,7 @@ type dataTransfer interface {
 type emptyDataTransfer struct{}
 
 func (emptyDataTransfer) Conn(ctx context.Context) (net.Conn, error) {
-	return nil, errors.New("alread closed")
+	return nil, errors.New("already closed")
 }
 
 func (emptyDataTransfer) Close() error {
@@ -204,7 +204,7 @@ func (t *passiveDataTransfer) Conn(ctx context.Context) (net.Conn, error) {
 	select {
 	case c, ok := <-t.ch:
 		if !ok {
-			return nil, errors.New("alread closed")
+			return nil, errors.New("already closed")
 		}
 		if c.err != nil {
 			return nil, c.err
