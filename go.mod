@@ -5,7 +5,7 @@ require (
 	github.com/konsorten/go-windows-terminal-sequences v1.0.2 // indirect
 	github.com/kr/pretty v0.1.0 // indirect
 	github.com/shogo82148/go-tap v0.0.1
-	github.com/shogo82148/server-starter v0.0.2
+	github.com/shogo82148/server-starter v0.0.3
 	github.com/sirupsen/logrus v1.4.2
 	github.com/stretchr/testify v1.3.0 // indirect
 	golang.org/x/crypto v0.0.0-20190911031432-227b76d455e7
