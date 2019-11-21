@@ -1,7 +1,7 @@
 module github.com/shogo82148/s3ftpgateway
 
 require (
-	github.com/aws/aws-sdk-go-v2 v0.16.0
+	github.com/aws/aws-sdk-go-v2 v0.17.0
 	github.com/konsorten/go-windows-terminal-sequences v1.0.2 // indirect
 	github.com/kr/pretty v0.1.0 // indirect
 	github.com/shogo82148/go-tap v0.0.1
