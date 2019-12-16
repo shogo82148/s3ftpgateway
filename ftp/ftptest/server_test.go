@@ -7,6 +7,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"runtime"
+	"strings"
 	"testing"
 
 	"github.com/shogo82148/s3ftpgateway/ftp/internal"
@@ -156,11 +157,10 @@ func TestServer_ExplicitTLS_EPSV(t *testing.T) {
 	cmd.Stdout = &stdout
 	cmd.Stderr = &stderr
 	if err := cmd.Run(); err != nil {
-		t.Log(stderr.String())
 		t.Fatal(err)
 	}
+	t.Logf("`%s` is finished:\n%s", strings.Join(args, " "), stderr.String())
 	if stdout.String() != "Hello ftp!" {
-		t.Log(stderr.String())
 		t.Errorf("want %s, got %s", "Hello ftp!", stdout.String())
 	}
 }
