@@ -161,6 +161,8 @@ func TestServer_ExplicitTLS_EPSV(t *testing.T) {
 			stderr.Reset()
 			stdout.Reset()
 			cmd = exec.Command(curl, append(args, "-k")...)
+			cmd.Stdout = &stdout
+			cmd.Stderr = &stderr
 			if err := cmd.Run(); err != nil {
 				t.Error(err)
 			}
@@ -168,7 +170,7 @@ func TestServer_ExplicitTLS_EPSV(t *testing.T) {
 			t.Error(err)
 		}
 	}
-	t.Logf("`curl %s` is finished:\n%s", strings.Join(args, " "), stderr.String())
+	t.Logf("`curl %s` is finished:\n%s", strings.Join(cmd.Args, " "), stderr.String())
 	if stdout.String() != "Hello ftp!" {
 		t.Errorf("want %s, got %s", "Hello ftp!", stdout.String())
 	}
@@ -210,6 +212,8 @@ func TestServer_ExplicitTLS_EPRT(t *testing.T) {
 			stderr.Reset()
 			stdout.Reset()
 			cmd = exec.Command(curl, append(args, "-k")...)
+			cmd.Stdout = &stdout
+			cmd.Stderr = &stderr
 			if err := cmd.Run(); err != nil {
 				t.Error(err)
 			}
@@ -217,7 +221,7 @@ func TestServer_ExplicitTLS_EPRT(t *testing.T) {
 			t.Error(err)
 		}
 	}
-	t.Logf("`curl %s` is finished:\n%s", strings.Join(args, " "), stderr.String())
+	t.Logf("`curl %s` is finished:\n%s", strings.Join(cmd.Args, " "), stderr.String())
 	if stdout.String() != "Hello ftp!" {
 		t.Errorf("want %s, got %s", "Hello ftp!", stdout.String())
 	}
@@ -259,6 +263,8 @@ func TestServer_ImplictTLS_EPSV(t *testing.T) {
 			stderr.Reset()
 			stdout.Reset()
 			cmd = exec.Command(curl, append(args, "-k")...)
+			cmd.Stdout = &stdout
+			cmd.Stderr = &stderr
 			if err := cmd.Run(); err != nil {
 				t.Error(err)
 			}
@@ -266,7 +272,7 @@ func TestServer_ImplictTLS_EPSV(t *testing.T) {
 			t.Error(err)
 		}
 	}
-	t.Logf("`curl %s` is finished:\n%s", strings.Join(args, " "), stderr.String())
+	t.Logf("`curl %s` is finished:\n%s", strings.Join(cmd.Args, " "), stderr.String())
 	if stdout.String() != "Hello ftp!" {
 		t.Errorf("want %s, got %s", "Hello ftp!", stdout.String())
 	}
@@ -308,6 +314,8 @@ func TestServer_ImplicitTLS_EPRT(t *testing.T) {
 			stderr.Reset()
 			stdout.Reset()
 			cmd = exec.Command(curl, append(args, "-k")...)
+			cmd.Stdout = &stdout
+			cmd.Stderr = &stderr
 			if err := cmd.Run(); err != nil {
 				t.Error(err)
 			}
@@ -315,7 +323,7 @@ func TestServer_ImplicitTLS_EPRT(t *testing.T) {
 			t.Error(err)
 		}
 	}
-	t.Logf("`curl %s` is finished:\n%s", strings.Join(args, " "), stderr.String())
+	t.Logf("`curl %s` is finished:\n%s", strings.Join(cmd.Args, " "), stderr.String())
 	if stdout.String() != "Hello ftp!" {
 		t.Errorf("want %s, got %s", "Hello ftp!", stdout.String())
 	}
