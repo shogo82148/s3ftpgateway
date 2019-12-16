@@ -4,4 +4,4 @@ CURRENT=$(cd "$(dirname "$0")" && pwd)
 docker run --rm -it \
     -e GO111MODULE=on \
     -v "$CURRENT":/go/src/github.com/shogo82148/s3ftpgateway \
-    -w /go/src/github.com/shogo82148/s3ftpgateway golang:1.13.0 "$@"
+    -w /go/src/github.com/shogo82148/s3ftpgateway golang:1.13.5 "$@"
