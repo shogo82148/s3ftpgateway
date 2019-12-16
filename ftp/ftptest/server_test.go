@@ -6,7 +6,6 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
-	"runtime"
 	"strings"
 	"testing"
 
@@ -176,7 +175,7 @@ func TestServer_ExplicitTLS_EPRT(t *testing.T) {
 		"testfile": "Hello ftp!",
 	}))
 	ts.Config.Logger = testLogger{t}
-	ts.Start()
+	ts.StartTLS()
 	defer ts.Close()
 
 	dir, err := ioutil.TempDir("", "ftp-")
@@ -189,13 +188,7 @@ func TestServer_ExplicitTLS_EPRT(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	args := []string{ts.URL + "/testfile", "-s", "-v", "--ftp-ssl", "--ftp-port", "-"}
-	if runtime.GOOS != "windows" {
-		args = append(args, "--cacert", cert)
-	} else {
-		// curl does not accept --cacert option in windows, why???
-		args = append(args, "-k")
-	}
+	args := []string{ts.URL + "/testfile", "-s", "-v", "--ftp-ssl", "--ftp-port", "-", "--cacert", cert}
 
 	var stdout, stderr bytes.Buffer
 	cmd := exec.Command(curl, args...)
@@ -234,13 +227,7 @@ func TestServer_ImplictTLS_EPSV(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	args := []string{ts.URL + "/testfile", "-s", "-v", "--ftp-ssl", "--ftp-pasv"}
-	if runtime.GOOS != "windows" {
-		args = append(args, "--cacert", cert)
-	} else {
-		// curl does not accept --cacert option in windows, why???
-		args = append(args, "-k")
-	}
+	args := []string{ts.URL + "/testfile", "-s", "-v", "--ftp-ssl", "--ftp-pasv", "--cacert", cert}
 
 	var stdout, stderr bytes.Buffer
 	cmd := exec.Command(curl, args...)
@@ -279,13 +266,7 @@ func TestServer_ImplicitTLS_EPRT(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	args := []string{ts.URL + "/testfile", "-s", "-v", "--ftp-ssl", "--ftp-port", "-"}
-	if runtime.GOOS != "windows" {
-		args = append(args, "--cacert", cert)
-	} else {
-		// curl does not accept --cacert option in windows, why???
-		args = append(args, "-k")
-	}
+	args := []string{ts.URL + "/testfile", "-s", "-v", "--ftp-ssl", "--ftp-port", "-", "--cacert", cert}
 
 	var stdout, stderr bytes.Buffer
 	cmd := exec.Command(curl, args...)
