@@ -3,8 +3,6 @@ package ftptest
 import (
 	"bytes"
 	"io/ioutil"
-	"net"
-	"net/url"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -150,14 +148,14 @@ func TestServer_ExplicitTLS_EPSV(t *testing.T) {
 	if err := ioutil.WriteFile(cert, internal.LocalhostCert, 0666); err != nil {
 		t.Fatal(err)
 	}
-	u, err := url.Parse(ts.URL)
-	if err != nil {
-		t.Fatal(err)
-	}
-	u.Host = net.JoinHostPort("s3ftpgateway.loopback.shogo82148.com", u.Port())
-	u.Path = "/testfile"
 
-	args := []string{u.String(), "-s", "-v", "--ftp-ssl", "--ftp-pasv", "--cacert", cert}
+	args := []string{ts.URL + "/testfile", "-s", "-v", "--ftp-ssl", "--ftp-pasv"}
+	if runtime.GOOS != "windows" {
+		args = append(args, "--cacert", cert)
+	} else {
+		// curl does not accept --cacert option in windows, why???
+		args = append(args, "-k")
+	}
 
 	var stdout, stderr bytes.Buffer
 	cmd := exec.Command(curl, args...)
