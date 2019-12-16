@@ -29,15 +29,15 @@ func TestServer_EPSV(t *testing.T) {
 	defer ts.Close()
 
 	var stdout, stderr bytes.Buffer
-	cmd := exec.Command(curl, "-s", "-v", "--ftp-pasv", ts.URL+"/testfile")
+	args := []string{"-s", "-v", "--ftp-pasv", ts.URL + "/testfile"}
+	cmd := exec.Command(curl, args...)
 	cmd.Stdout = &stdout
 	cmd.Stderr = &stderr
 	if err := cmd.Run(); err != nil {
-		t.Log(stderr.String())
-		t.Fatal(err)
+		t.Error(err)
 	}
+	t.Logf("`curl %s` is finished:\n%s", strings.Join(args, " "), stderr.String())
 	if stdout.String() != "Hello ftp!" {
-		t.Log(stderr.String())
 		t.Errorf("want %s, got %s", "Hello ftp!", stdout.String())
 	}
 }
@@ -57,15 +57,15 @@ func TestServer_PASV(t *testing.T) {
 	defer ts.Close()
 
 	var stdout, stderr bytes.Buffer
-	cmd := exec.Command(curl, "-s", "-v", "--ftp-pasv", "--no-epsv", ts.URL+"/testfile")
+	args := []string{"-s", "-v", "--ftp-pasv", "--no-epsv", ts.URL + "/testfile"}
+	cmd := exec.Command(curl, args...)
 	cmd.Stdout = &stdout
 	cmd.Stderr = &stderr
 	if err := cmd.Run(); err != nil {
-		t.Log(stderr.String())
-		t.Fatal(err)
+		t.Error(err)
 	}
+	t.Logf("`curl %s` is finished:\n%s", strings.Join(args, " "), stderr.String())
 	if stdout.String() != "Hello ftp!" {
-		t.Log(stderr.String())
 		t.Errorf("want %s, got %s", "Hello ftp!", stdout.String())
 	}
 }
@@ -85,15 +85,15 @@ func TestServer_EPRT(t *testing.T) {
 	defer ts.Close()
 
 	var stdout, stderr bytes.Buffer
-	cmd := exec.Command(curl, "-s", "-v", "--ftp-port", "-", ts.URL+"/testfile")
+	args := []string{"-s", "-v", "--ftp-port", "-", ts.URL + "/testfile"}
+	cmd := exec.Command(curl, args...)
 	cmd.Stdout = &stdout
 	cmd.Stderr = &stderr
 	if err := cmd.Run(); err != nil {
-		t.Log(stderr.String())
-		t.Fatal(err)
+		t.Error(err)
 	}
+	t.Logf("`curl %s` is finished:\n%s", strings.Join(args, " "), stderr.String())
 	if stdout.String() != "Hello ftp!" {
-		t.Log(stderr.String())
 		t.Errorf("want %s, got %s", "Hello ftp!", stdout.String())
 	}
 }
@@ -113,15 +113,15 @@ func TestServer_PORT(t *testing.T) {
 	defer ts.Close()
 
 	var stdout, stderr bytes.Buffer
-	cmd := exec.Command(curl, "-s", "-v", "--ftp-port", "-", "--no-eprt", ts.URL+"/testfile")
+	args := []string{"-s", "-v", "--ftp-port", "-", "--no-eprt", ts.URL + "/testfile"}
+	cmd := exec.Command(curl, args...)
 	cmd.Stdout = &stdout
 	cmd.Stderr = &stderr
 	if err := cmd.Run(); err != nil {
-		t.Log(stderr.String())
-		t.Fatal(err)
+		t.Error(err)
 	}
+	t.Logf("`curl %s` is finished:\n%s", strings.Join(args, " "), stderr.String())
 	if stdout.String() != "Hello ftp!" {
-		t.Log(stderr.String())
 		t.Errorf("want %s, got %s", "Hello ftp!", stdout.String())
 	}
 }
@@ -157,9 +157,9 @@ func TestServer_ExplicitTLS_EPSV(t *testing.T) {
 	cmd.Stdout = &stdout
 	cmd.Stderr = &stderr
 	if err := cmd.Run(); err != nil {
-		t.Fatal(err)
+		t.Error(err)
 	}
-	t.Logf("`%s` is finished:\n%s", strings.Join(args, " "), stderr.String())
+	t.Logf("`curl %s` is finished:\n%s", strings.Join(args, " "), stderr.String())
 	if stdout.String() != "Hello ftp!" {
 		t.Errorf("want %s, got %s", "Hello ftp!", stdout.String())
 	}
@@ -202,11 +202,10 @@ func TestServer_ExplicitTLS_EPRT(t *testing.T) {
 	cmd.Stdout = &stdout
 	cmd.Stderr = &stderr
 	if err := cmd.Run(); err != nil {
-		t.Log(stderr.String())
-		t.Fatal(err)
+		t.Error(err)
 	}
+	t.Logf("`curl %s` is finished:\n%s", strings.Join(args, " "), stderr.String())
 	if stdout.String() != "Hello ftp!" {
-		t.Log(stderr.String())
 		t.Errorf("want %s, got %s", "Hello ftp!", stdout.String())
 	}
 }
@@ -248,11 +247,10 @@ func TestServer_ImplictTLS_EPSV(t *testing.T) {
 	cmd.Stdout = &stdout
 	cmd.Stderr = &stderr
 	if err := cmd.Run(); err != nil {
-		t.Log(stderr.String())
-		t.Fatal(err)
+		t.Error(err)
 	}
+	t.Logf("`curl %s` is finished:\n%s", strings.Join(args, " "), stderr.String())
 	if stdout.String() != "Hello ftp!" {
-		t.Log(stderr.String())
 		t.Errorf("want %s, got %s", "Hello ftp!", stdout.String())
 	}
 }
@@ -294,11 +292,10 @@ func TestServer_ImplicitTLS_EPRT(t *testing.T) {
 	cmd.Stdout = &stdout
 	cmd.Stderr = &stderr
 	if err := cmd.Run(); err != nil {
-		t.Log(stderr.String())
-		t.Fatal(err)
+		t.Error(err)
 	}
+	t.Logf("`curl %s` is finished:\n%s", strings.Join(args, " "), stderr.String())
 	if stdout.String() != "Hello ftp!" {
-		t.Log(stderr.String())
 		t.Errorf("want %s, got %s", "Hello ftp!", stdout.String())
 	}
 }
