@@ -6,7 +6,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
-	"runtime"
+	"strings"
 	"testing"
 
 	"github.com/shogo82148/s3ftpgateway/ftp/internal"
@@ -28,15 +28,15 @@ func TestServer_EPSV(t *testing.T) {
 	defer ts.Close()
 
 	var stdout, stderr bytes.Buffer
-	cmd := exec.Command(curl, "-s", "-v", "--ftp-pasv", ts.URL+"/testfile")
+	args := []string{"-s", "-v", "--ftp-pasv", ts.URL + "/testfile"}
+	cmd := exec.Command(curl, args...)
 	cmd.Stdout = &stdout
 	cmd.Stderr = &stderr
 	if err := cmd.Run(); err != nil {
-		t.Log(stderr.String())
-		t.Fatal(err)
+		t.Error(err)
 	}
+	t.Logf("`curl %s` is finished:\n%s", strings.Join(args, " "), stderr.String())
 	if stdout.String() != "Hello ftp!" {
-		t.Log(stderr.String())
 		t.Errorf("want %s, got %s", "Hello ftp!", stdout.String())
 	}
 }
@@ -56,15 +56,15 @@ func TestServer_PASV(t *testing.T) {
 	defer ts.Close()
 
 	var stdout, stderr bytes.Buffer
-	cmd := exec.Command(curl, "-s", "-v", "--ftp-pasv", "--no-epsv", ts.URL+"/testfile")
+	args := []string{"-s", "-v", "--ftp-pasv", "--no-epsv", ts.URL + "/testfile"}
+	cmd := exec.Command(curl, args...)
 	cmd.Stdout = &stdout
 	cmd.Stderr = &stderr
 	if err := cmd.Run(); err != nil {
-		t.Log(stderr.String())
-		t.Fatal(err)
+		t.Error(err)
 	}
+	t.Logf("`curl %s` is finished:\n%s", strings.Join(args, " "), stderr.String())
 	if stdout.String() != "Hello ftp!" {
-		t.Log(stderr.String())
 		t.Errorf("want %s, got %s", "Hello ftp!", stdout.String())
 	}
 }
@@ -84,15 +84,15 @@ func TestServer_EPRT(t *testing.T) {
 	defer ts.Close()
 
 	var stdout, stderr bytes.Buffer
-	cmd := exec.Command(curl, "-s", "-v", "--ftp-port", "-", ts.URL+"/testfile")
+	args := []string{"-s", "-v", "--ftp-port", "-", ts.URL + "/testfile"}
+	cmd := exec.Command(curl, args...)
 	cmd.Stdout = &stdout
 	cmd.Stderr = &stderr
 	if err := cmd.Run(); err != nil {
-		t.Log(stderr.String())
-		t.Fatal(err)
+		t.Error(err)
 	}
+	t.Logf("`curl %s` is finished:\n%s", strings.Join(args, " "), stderr.String())
 	if stdout.String() != "Hello ftp!" {
-		t.Log(stderr.String())
 		t.Errorf("want %s, got %s", "Hello ftp!", stdout.String())
 	}
 }
@@ -112,15 +112,15 @@ func TestServer_PORT(t *testing.T) {
 	defer ts.Close()
 
 	var stdout, stderr bytes.Buffer
-	cmd := exec.Command(curl, "-s", "-v", "--ftp-port", "-", "--no-eprt", ts.URL+"/testfile")
+	args := []string{"-s", "-v", "--ftp-port", "-", "--no-eprt", ts.URL + "/testfile"}
+	cmd := exec.Command(curl, args...)
 	cmd.Stdout = &stdout
 	cmd.Stderr = &stderr
 	if err := cmd.Run(); err != nil {
-		t.Log(stderr.String())
-		t.Fatal(err)
+		t.Error(err)
 	}
+	t.Logf("`curl %s` is finished:\n%s", strings.Join(args, " "), stderr.String())
 	if stdout.String() != "Hello ftp!" {
-		t.Log(stderr.String())
 		t.Errorf("want %s, got %s", "Hello ftp!", stdout.String())
 	}
 }
@@ -136,7 +136,7 @@ func TestServer_ExplicitTLS_EPSV(t *testing.T) {
 		"testfile": "Hello ftp!",
 	}))
 	ts.Config.Logger = testLogger{t}
-	ts.Start()
+	ts.StartTLS()
 	defer ts.Close()
 
 	dir, err := ioutil.TempDir("", "ftp-")
@@ -150,23 +150,28 @@ func TestServer_ExplicitTLS_EPSV(t *testing.T) {
 	}
 
 	args := []string{ts.URL + "/testfile", "-s", "-v", "--ftp-ssl", "--ftp-pasv"}
-	if runtime.GOOS != "windows" {
-		args = append(args, "--cacert", cert)
-	} else {
-		// curl does not accept --cacert option in windows, why???
-		args = append(args, "-k")
-	}
 
 	var stdout, stderr bytes.Buffer
-	cmd := exec.Command(curl, args...)
+	cmd := exec.Command(curl, append(args, "--cacert", cert)...)
 	cmd.Stdout = &stdout
 	cmd.Stderr = &stderr
 	if err := cmd.Run(); err != nil {
-		t.Log(stderr.String())
-		t.Fatal(err)
+		if strings.Contains(stderr.String(), "WARNING: using IP address, SNI is being disabled by the OS.") {
+			t.Log("certificate verification failed, skip it")
+			stderr.Reset()
+			stdout.Reset()
+			cmd = exec.Command(curl, append(args, "-k")...)
+			cmd.Stdout = &stdout
+			cmd.Stderr = &stderr
+			if err := cmd.Run(); err != nil {
+				t.Error(err)
+			}
+		} else {
+			t.Error(err)
+		}
 	}
+	t.Logf("`curl %s` is finished:\n%s", strings.Join(cmd.Args, " "), stderr.String())
 	if stdout.String() != "Hello ftp!" {
-		t.Log(stderr.String())
 		t.Errorf("want %s, got %s", "Hello ftp!", stdout.String())
 	}
 }
@@ -182,7 +187,7 @@ func TestServer_ExplicitTLS_EPRT(t *testing.T) {
 		"testfile": "Hello ftp!",
 	}))
 	ts.Config.Logger = testLogger{t}
-	ts.Start()
+	ts.StartTLS()
 	defer ts.Close()
 
 	dir, err := ioutil.TempDir("", "ftp-")
@@ -196,23 +201,28 @@ func TestServer_ExplicitTLS_EPRT(t *testing.T) {
 	}
 
 	args := []string{ts.URL + "/testfile", "-s", "-v", "--ftp-ssl", "--ftp-port", "-"}
-	if runtime.GOOS != "windows" {
-		args = append(args, "--cacert", cert)
-	} else {
-		// curl does not accept --cacert option in windows, why???
-		args = append(args, "-k")
-	}
 
 	var stdout, stderr bytes.Buffer
-	cmd := exec.Command(curl, args...)
+	cmd := exec.Command(curl, append(args, "--cacert", cert)...)
 	cmd.Stdout = &stdout
 	cmd.Stderr = &stderr
 	if err := cmd.Run(); err != nil {
-		t.Log(stderr.String())
-		t.Fatal(err)
+		if strings.Contains(stderr.String(), "WARNING: using IP address, SNI is being disabled by the OS.") {
+			t.Log("certificate verification failed, skip it")
+			stderr.Reset()
+			stdout.Reset()
+			cmd = exec.Command(curl, append(args, "-k")...)
+			cmd.Stdout = &stdout
+			cmd.Stderr = &stderr
+			if err := cmd.Run(); err != nil {
+				t.Error(err)
+			}
+		} else {
+			t.Error(err)
+		}
 	}
+	t.Logf("`curl %s` is finished:\n%s", strings.Join(cmd.Args, " "), stderr.String())
 	if stdout.String() != "Hello ftp!" {
-		t.Log(stderr.String())
 		t.Errorf("want %s, got %s", "Hello ftp!", stdout.String())
 	}
 }
@@ -242,23 +252,28 @@ func TestServer_ImplictTLS_EPSV(t *testing.T) {
 	}
 
 	args := []string{ts.URL + "/testfile", "-s", "-v", "--ftp-ssl", "--ftp-pasv"}
-	if runtime.GOOS != "windows" {
-		args = append(args, "--cacert", cert)
-	} else {
-		// curl does not accept --cacert option in windows, why???
-		args = append(args, "-k")
-	}
 
 	var stdout, stderr bytes.Buffer
-	cmd := exec.Command(curl, args...)
+	cmd := exec.Command(curl, append(args, "--cacert", cert)...)
 	cmd.Stdout = &stdout
 	cmd.Stderr = &stderr
 	if err := cmd.Run(); err != nil {
-		t.Log(stderr.String())
-		t.Fatal(err)
+		if strings.Contains(stderr.String(), "WARNING: using IP address, SNI is being disabled by the OS.") {
+			t.Log("certificate verification failed, skip it")
+			stderr.Reset()
+			stdout.Reset()
+			cmd = exec.Command(curl, append(args, "-k")...)
+			cmd.Stdout = &stdout
+			cmd.Stderr = &stderr
+			if err := cmd.Run(); err != nil {
+				t.Error(err)
+			}
+		} else {
+			t.Error(err)
+		}
 	}
+	t.Logf("`curl %s` is finished:\n%s", strings.Join(cmd.Args, " "), stderr.String())
 	if stdout.String() != "Hello ftp!" {
-		t.Log(stderr.String())
 		t.Errorf("want %s, got %s", "Hello ftp!", stdout.String())
 	}
 }
@@ -288,23 +303,28 @@ func TestServer_ImplicitTLS_EPRT(t *testing.T) {
 	}
 
 	args := []string{ts.URL + "/testfile", "-s", "-v", "--ftp-ssl", "--ftp-port", "-"}
-	if runtime.GOOS != "windows" {
-		args = append(args, "--cacert", cert)
-	} else {
-		// curl does not accept --cacert option in windows, why???
-		args = append(args, "-k")
-	}
 
 	var stdout, stderr bytes.Buffer
-	cmd := exec.Command(curl, args...)
+	cmd := exec.Command(curl, append(args, "--cacert", cert)...)
 	cmd.Stdout = &stdout
 	cmd.Stderr = &stderr
 	if err := cmd.Run(); err != nil {
-		t.Log(stderr.String())
-		t.Fatal(err)
+		if strings.Contains(stderr.String(), "WARNING: using IP address, SNI is being disabled by the OS.") {
+			t.Log("certificate verification failed, skip it")
+			stderr.Reset()
+			stdout.Reset()
+			cmd = exec.Command(curl, append(args, "-k")...)
+			cmd.Stdout = &stdout
+			cmd.Stderr = &stderr
+			if err := cmd.Run(); err != nil {
+				t.Error(err)
+			}
+		} else {
+			t.Error(err)
+		}
 	}
+	t.Logf("`curl %s` is finished:\n%s", strings.Join(cmd.Args, " "), stderr.String())
 	if stdout.String() != "Hello ftp!" {
-		t.Log(stderr.String())
 		t.Errorf("want %s, got %s", "Hello ftp!", stdout.String())
 	}
 }

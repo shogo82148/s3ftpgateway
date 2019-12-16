@@ -1,35 +1,45 @@
 name: test
 on:
-- push
-- pull_request
+  - push
+  - pull_request
+
 jobs:
   test:
     name: test
     runs-on: ${{ matrix.os }}
     strategy:
+      fail-fast: false
       matrix:
         golang:
-        - "1.13"
+          - "1.13"
         os:
-        - ubuntu-latest
-        - windows-latest
-        - macOS-latest
+          - ubuntu-latest
+          - windows-latest
+          - macOS-latest
     steps:
-    - name: setup Go ${{ matrix.golang }}
-      uses: actions/setup-go@v1
-      with:
-        go-version: ${{ matrix.golang }}
-    - name: setup perl
-      uses: shogo82148/actions-setup-perl@v1
-      with:
-        perl-version: '5.30'
-    - name: checkout
-      uses: actions/checkout@v1
-    - name: test
-      run: make test
-      env:
-        GO111MODULE: "on"
-        AWS_DEFAULT_REGION: us-east-1
-        AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
-        AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-        S3FS_TEST_BUCKET: shogo82148-s3ftpgateway
+      - name: setup Go ${{ matrix.golang }}
+        uses: actions/setup-go@v1
+        with:
+          go-version: ${{ matrix.golang }}
+      - name: setup perl
+        uses: shogo82148/actions-setup-perl@v1
+        with:
+          perl-version: '5.30'
+
+      - name: checkout
+        uses: actions/checkout@v1
+      - uses: actions/cache@v1
+        with:
+          path: ~/go/pkg/mod
+          key: ${{ runner.os }}-go-${{ hashFiles('**/go.sum') }}
+          restore-keys: |
+            ${{ runner.os }}-go-
+
+      - name: test
+        run: make test
+        env:
+          GO111MODULE: "on"
+          AWS_DEFAULT_REGION: us-east-1
+          AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          S3FS_TEST_BUCKET: shogo82148-s3ftpgateway
