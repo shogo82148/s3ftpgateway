@@ -327,7 +327,9 @@ func TestServer_ImplicitTLS_EPRT(t *testing.T) {
 
 func verificationNotSupported(t *testing.T, stderr string) bool {
 	// SNI is disabled in Windows on GitHub Actions.
-	if strings.Contains(stderr, "using IP address, SNI is being disabled by the OS.") {
+	notSupported := strings.Contains(stderr, "using IP address, SNI is not supported by OS.")
+	notSupported = notSupported || strings.Contains(stderr, "using IP address, SNI is being disabled by the OS.")
+	if notSupported {
 		t.Log("it seems that certificate verification is disabled, try again without verification")
 		return true
 	}
