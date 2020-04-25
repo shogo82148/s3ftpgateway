@@ -156,8 +156,7 @@ func TestServer_ExplicitTLS_EPSV(t *testing.T) {
 	cmd.Stdout = &stdout
 	cmd.Stderr = &stderr
 	if err := cmd.Run(); err != nil {
-		if strings.Contains(stderr.String(), "WARNING: using IP address, SNI is being disabled by the OS.") {
-			t.Log("certificate verification failed, skip it")
+		if verificationNotSupported(t, stderr.String()) {
 			stderr.Reset()
 			stdout.Reset()
 			cmd = exec.Command(curl, append(args, "-k")...)
@@ -207,8 +206,7 @@ func TestServer_ExplicitTLS_EPRT(t *testing.T) {
 	cmd.Stdout = &stdout
 	cmd.Stderr = &stderr
 	if err := cmd.Run(); err != nil {
-		if strings.Contains(stderr.String(), "WARNING: using IP address, SNI is being disabled by the OS.") {
-			t.Log("certificate verification failed, skip it")
+		if verificationNotSupported(t, stderr.String()) {
 			stderr.Reset()
 			stdout.Reset()
 			cmd = exec.Command(curl, append(args, "-k")...)
@@ -258,8 +256,7 @@ func TestServer_ImplictTLS_EPSV(t *testing.T) {
 	cmd.Stdout = &stdout
 	cmd.Stderr = &stderr
 	if err := cmd.Run(); err != nil {
-		if strings.Contains(stderr.String(), "WARNING: using IP address, SNI is being disabled by the OS.") {
-			t.Log("certificate verification failed, skip it")
+		if verificationNotSupported(t, stderr.String()) {
 			stderr.Reset()
 			stdout.Reset()
 			cmd = exec.Command(curl, append(args, "-k")...)
@@ -309,8 +306,7 @@ func TestServer_ImplicitTLS_EPRT(t *testing.T) {
 	cmd.Stdout = &stdout
 	cmd.Stderr = &stderr
 	if err := cmd.Run(); err != nil {
-		if strings.Contains(stderr.String(), "WARNING: using IP address, SNI is being disabled by the OS.") {
-			t.Log("certificate verification failed, skip it")
+		if verificationNotSupported(t, stderr.String()) {
 			stderr.Reset()
 			stdout.Reset()
 			cmd = exec.Command(curl, append(args, "-k")...)
@@ -327,4 +323,13 @@ func TestServer_ImplicitTLS_EPRT(t *testing.T) {
 	if stdout.String() != "Hello ftp!" {
 		t.Errorf("want %s, got %s", "Hello ftp!", stdout.String())
 	}
+}
+
+func verificationNotSupported(t *testing.T, stderr string) bool {
+	// SNI is disabled in Windows on GitHub Actions.
+	if strings.Contains(stderr, "using IP address, SNI is being disabled by the OS.") {
+		t.Log("it seems that certificate verification is disabled, try again without verification")
+		return true
+	}
+	return false
 }
