@@ -37,6 +37,8 @@ github.com/shogo82148/go-tap v0.0.1 h1:QsqO58fKqbY08Co4wAt3e+/VGXPPIxK3JCqmz2EFP
 github.com/shogo82148/go-tap v0.0.1/go.mod h1:qGl8iCKJTDTvtdIuciMDwlNvHgGuzqTj9a/147D62+Q=
 github.com/shogo82148/server-starter v0.0.4 h1:W6zlj5BZHDY3yXCaEwiGhgwMVZOO8fDJtG9h/f48EiM=
 github.com/shogo82148/server-starter v0.0.4/go.mod h1:GqlQ2ncZ2esqAWKQoMq8H36RgO4gDlIo7jY/1Fv5Kzo=
+github.com/shogo82148/server-starter v0.0.5 h1:L3nxlevf63x8Upkn4j4X1Y/nywoXIkHZx+Zgjc0RgUI=
+github.com/shogo82148/server-starter v0.0.5/go.mod h1:GqlQ2ncZ2esqAWKQoMq8H36RgO4gDlIo7jY/1Fv5Kzo=
 github.com/sirupsen/logrus v1.5.0 h1:1N5EYkVAPEywqZRJd7cwnRtCb6xJx7NH3T3WUTF980Q=
 github.com/sirupsen/logrus v1.5.0/go.mod h1:+F7Ogzej0PZc/94MaYx/nvG9jOFMD2osvC3s+Squfpo=
 github.com/sirupsen/logrus v1.6.0 h1:UBcNElsrwanuuMsnGSlYmtmgbb23qDR5dG+6X6Oo89I=
