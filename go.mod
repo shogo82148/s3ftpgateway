@@ -6,7 +6,7 @@ require (
 	github.com/jmespath/go-jmespath v0.3.0 // indirect
 	github.com/kr/pretty v0.1.0 // indirect
 	github.com/shogo82148/go-tap v0.0.1
-	github.com/shogo82148/server-starter v0.0.4
+	github.com/shogo82148/server-starter v0.0.5
 	github.com/sirupsen/logrus v1.6.0
 	golang.org/x/crypto v0.0.0-20200423211502-4bdfaf469ed5
 	golang.org/x/sys v0.0.0-20200420163511-1957bb5e6d1f // indirect
