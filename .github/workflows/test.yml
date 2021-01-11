@@ -18,7 +18,7 @@ jobs:
           - macOS-latest
     steps:
       - name: setup Go ${{ matrix.golang }}
-        uses: actions/setup-go@v1
+        uses: actions/setup-go@v2
         with:
           go-version: ${{ matrix.golang }}
       - name: setup perl
