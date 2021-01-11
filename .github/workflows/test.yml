@@ -24,7 +24,7 @@ jobs:
       - name: setup perl
         uses: shogo82148/actions-setup-perl@v1
         with:
-          perl-version: '5.30'
+          perl-version: "5.30"
 
       - name: checkout
         uses: actions/checkout@v1
