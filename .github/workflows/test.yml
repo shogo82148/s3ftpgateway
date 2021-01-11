@@ -11,7 +11,7 @@ jobs:
       fail-fast: false
       matrix:
         golang:
-          - "1.13"
+          - "1.15"
         os:
           - ubuntu-latest
           - windows-latest
