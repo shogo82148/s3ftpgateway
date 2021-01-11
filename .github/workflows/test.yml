@@ -1,7 +1,9 @@
 name: test
 on:
-  - push
-  - pull_request
+  push:
+    branches:
+      - main
+  pull_request:
 
 jobs:
   test:
@@ -11,14 +13,14 @@ jobs:
       fail-fast: false
       matrix:
         golang:
-          - "1.13"
+          - "1.15"
         os:
           - ubuntu-latest
           - windows-latest
           - macOS-latest
     steps:
       - name: setup Go ${{ matrix.golang }}
-        uses: actions/setup-go@v1
+        uses: actions/setup-go@v2
         with:
           go-version: ${{ matrix.golang }}
       - name: setup perl
