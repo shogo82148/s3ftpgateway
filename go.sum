@@ -21,8 +21,8 @@ github.com/pmezard/go-difflib v1.0.0 h1:4DBwDE0NGyQoBHbLQYPwSUPoCMWR5BEzIk/f1lZb
 github.com/pmezard/go-difflib v1.0.0/go.mod h1:iKH77koFhYxTK1pcRnkKkqfTogsbg7gZNVY4sRDYZ/4=
 github.com/shogo82148/go-tap v0.0.3 h1:i3RzbsucWz9caoWS0wFAmJGEU0hwCsWmuK9kYGPoajw=
 github.com/shogo82148/go-tap v0.0.3/go.mod h1:H6vRVOZ2uqX/Epmer6MnielLhU3ybUIPm6P3G4zGf5E=
-github.com/shogo82148/server-starter v0.0.7 h1:04gD7iTMAvECEsgvm8bsed6kjIZB6HlIuPYROXCVz/E=
-github.com/shogo82148/server-starter v0.0.7/go.mod h1:GqlQ2ncZ2esqAWKQoMq8H36RgO4gDlIo7jY/1Fv5Kzo=
+github.com/shogo82148/server-starter v0.0.9 h1:N5+SZbHJaXmTD1v7qrN06szldKjNRiUeZEn86PomLB4=
+github.com/shogo82148/server-starter v0.0.9/go.mod h1:GqlQ2ncZ2esqAWKQoMq8H36RgO4gDlIo7jY/1Fv5Kzo=
 github.com/sirupsen/logrus v1.8.0 h1:nfhvjKcUMhBMVqbKHJlk5RPrrfYr/NMo3692g0dwfWU=
 github.com/sirupsen/logrus v1.8.0/go.mod h1:4GuYW9TZmE769R5STWrRakJc4UqQ3+QQ95fyz7ENv1A=
 github.com/stretchr/objx v0.1.0/go.mod h1:HFkY916IF+rwdDfMAkV7OtwuqBVzrE8GR6GFx+wExME=
