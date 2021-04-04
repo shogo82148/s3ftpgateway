@@ -10,6 +10,7 @@ Resources:
   TestBucket:
     Type: AWS::S3::Bucket
     DeletionPolicy: Retain
+    UpdateReplacePolicy: Retain
     Properties:
       BucketName: !Ref Bucket
       LifecycleConfiguration:
@@ -17,34 +18,43 @@ Resources:
         - ExpirationInDays: 90
           Status: Enabled
 
-  TestUser:
-    Type: AWS::IAM::User
+  TestRole:
+    Type: AWS::IAM::Role
     Properties:
+      # trust policy for using https://github.com/shogo82148/actions-aws-assume-role
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Principal:
+              AWS: arn:aws:iam::053160724612:root
+            Action:
+              - 'sts:AssumeRole'
+            Condition:
+              StringEquals:
+                "sts:ExternalId": shogo82148/s3ftpgateway
+          - Effect: Allow
+            Principal:
+              AWS: arn:aws:iam::053160724612:root
+            Action:
+              - 'sts:TagSession'
       Policies:
-      - PolicyName: Test
-        PolicyDocument:
-          Version: 2012-10-17
-          Statement:
-          - Effect: Allow
-            Action:
-            - "s3:*"
-            Resource:
-            - !Sub "${TestBucket.Arn}/*"
-          - Effect: Allow
-            Action:
-            - "s3:Get*"
-            - "s3:List*"
-            Resource:
-            - !Sub "${TestBucket.Arn}"
-  TestUserAccessKey:
-    Type: AWS::IAM::AccessKey
-    DependsOn: TestUser
-    Properties:
-      Status: Active
-      UserName: !Ref TestUser
+        - PolicyName: Test
+          PolicyDocument:
+            Version: 2012-10-17
+            Statement:
+              - Effect: Allow
+                Action:
+                  - "s3:*"
+                Resource:
+                  - !Sub "${TestBucket.Arn}/*"
+              - Effect: Allow
+                Action:
+                  - "s3:Get*"
+                  - "s3:List*"
+                Resource:
+                  - !Sub "${TestBucket.Arn}"
 
 Outputs:
-  AccessKey:
-    Value: !Ref TestUserAccessKey
-  SecretAccessKey:
-    Value: !GetAtt TestUserAccessKey.SecretAccessKey
+  TestRole:
+    Value: !GetAtt TestRole.Arn

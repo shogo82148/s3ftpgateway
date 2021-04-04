@@ -35,11 +35,14 @@ jobs:
           restore-keys: |
             ${{ runner.os }}-go-
 
+      - name: Configure AWS Credentials
+        uses: shogo82148/actions-aws-assume-role@v1
+        with:
+          aws-region: us-east-1
+          role-to-assume: arn:aws:iam::445285296882:role/shogo82148-s3ftpgateway-TestRole-IKN52H3UIP7Y
+          role-session-tagging: true
+
       - name: test
         run: make test
         env:
-          GO111MODULE: "on"
-          AWS_DEFAULT_REGION: us-east-1
-          AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
-          AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
           S3FS_TEST_BUCKET: shogo82148-s3ftpgateway
