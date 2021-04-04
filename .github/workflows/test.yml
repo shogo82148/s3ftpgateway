@@ -39,7 +39,7 @@ jobs:
         uses: shogo82148/actions-aws-assume-role@v1
         with:
           aws-region: us-east-1
-          role-to-assume: arn:aws:iam::445285296882:role/rpm-repository-users-H2ORole-MUDL8E8BJ1VS
+          role-to-assume: arn:aws:iam::445285296882:role/shogo82148-s3ftpgateway-TestRole-IKN52H3UIP7Y
           role-session-tagging: true
 
       - name: test
