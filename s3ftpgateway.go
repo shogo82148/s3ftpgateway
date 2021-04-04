@@ -12,7 +12,7 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/aws/aws-sdk-go-v2/aws/external"
+	awsconfig "github.com/aws/aws-sdk-go-v2/config"
 	"github.com/shogo82148/s3ftpgateway/ftp"
 	"github.com/shogo82148/s3ftpgateway/vfs/s3fs"
 	"github.com/shogo82148/server-starter/listener"
@@ -51,7 +51,7 @@ func Serve(config *Config) {
 		logrus.WithError(err).Fatal("fail to listen")
 	}
 
-	cfg, err := external.LoadDefaultAWSConfig()
+	cfg, err := awsconfig.LoadDefaultConfig(context.Background())
 	if err != nil {
 		logrus.WithError(err).Fatal("fail to get AWS config")
 	}

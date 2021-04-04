@@ -13,12 +13,22 @@ import (
 	"time"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
-	"github.com/aws/aws-sdk-go-v2/aws/awserr"
+	awshttp "github.com/aws/aws-sdk-go-v2/aws/transport/http"
+	"github.com/aws/aws-sdk-go-v2/feature/s3/manager"
 	"github.com/aws/aws-sdk-go-v2/service/s3"
-	"github.com/aws/aws-sdk-go-v2/service/s3/s3iface"
-	"github.com/aws/aws-sdk-go-v2/service/s3/s3manager"
-	"github.com/aws/aws-sdk-go-v2/service/s3/s3manager/s3manageriface"
+	"github.com/aws/aws-sdk-go-v2/service/s3/types"
 )
+
+type s3client interface {
+	manager.HeadBucketAPIClient
+	manager.UploadAPIClient
+	DeleteObject(ctx context.Context, params *s3.DeleteObjectInput, optFns ...func(*s3.Options)) (*s3.DeleteObjectOutput, error)
+	GetObject(ctx context.Context, params *s3.GetObjectInput, optFns ...func(*s3.Options)) (*s3.GetObjectOutput, error)
+	ListObjectsV2(ctx context.Context, params *s3.ListObjectsV2Input, optFns ...func(*s3.Options)) (*s3.ListObjectsV2Output, error)
+}
+type uploaderClient interface {
+	Upload(ctx context.Context, input *s3.PutObjectInput, opts ...func(*manager.Uploader)) (*manager.UploadOutput, error)
+}
 
 // FileSystem implements ctxvfs.FileSystem
 type FileSystem struct {
@@ -27,8 +37,8 @@ type FileSystem struct {
 	Prefix string
 
 	mu          sync.Mutex
-	s3api       s3iface.ClientAPI
-	uploaderapi s3manageriface.UploaderAPI
+	s3api       s3client
+	uploaderapi uploaderClient
 }
 
 // filekey converts the name to the key value on the S3 bucket.
@@ -50,40 +60,32 @@ func filename(p string) string {
 	return strings.TrimPrefix(pathpkg.Clean(p), "/")
 }
 
-func (fs *FileSystem) s3() s3iface.ClientAPI {
+func (fs *FileSystem) s3() s3client {
 	fs.mu.Lock()
 	defer fs.mu.Unlock()
 
 	if fs.s3api == nil {
 		cfg := fs.Config
 		if cfg.Region == "" {
-			region, err := s3manager.GetBucketRegion(context.Background(), fs.Config, fs.Bucket, "us-west-2")
+			region, err := manager.GetBucketRegion(context.TODO(), nil, fs.Bucket)
 			if err != nil {
 				panic(err)
 			}
 			cfg = cfg.Copy()
 			cfg.Region = region
 		}
-		fs.s3api = s3.New(cfg)
+		fs.s3api = s3.NewFromConfig(cfg)
 	}
 	return fs.s3api
 }
 
-func (fs *FileSystem) uploader() s3manageriface.UploaderAPI {
+func (fs *FileSystem) uploader() uploaderClient {
+	s3 := fs.s3()
 	fs.mu.Lock()
 	defer fs.mu.Unlock()
 
 	if fs.uploaderapi == nil {
-		cfg := fs.Config
-		if cfg.Region == "" {
-			region, err := s3manager.GetBucketRegion(context.Background(), fs.Config, fs.Bucket, "us-west-2")
-			if err != nil {
-				panic(err)
-			}
-			cfg = cfg.Copy()
-			cfg.Region = region
-		}
-		fs.uploaderapi = s3manager.NewUploader(cfg)
+		fs.uploaderapi = manager.NewUploader(s3)
 	}
 	return fs.uploaderapi
 }
@@ -91,14 +93,14 @@ func (fs *FileSystem) uploader() s3manageriface.UploaderAPI {
 // Open opens the file.
 func (fs *FileSystem) Open(ctx context.Context, name string) (io.ReadCloser, error) {
 	svc := fs.s3()
-	req := svc.GetObjectRequest(&s3.GetObjectInput{
+	resp, err := svc.GetObject(ctx, &s3.GetObjectInput{
 		Bucket: aws.String(fs.Bucket),
 		Key:    aws.String(fs.filekey(name)),
 	})
-	resp, err := req.Send(ctx)
 	if err != nil {
-		if err, ok := err.(awserr.RequestFailure); ok {
-			switch err.StatusCode() {
+		var respErr *awshttp.ResponseError
+		if errors.As(err, &respErr) {
+			switch respErr.HTTPStatusCode() {
 			case http.StatusNotFound:
 				return nil, &os.PathError{
 					Op:   "open",
@@ -126,23 +128,23 @@ func (fs *FileSystem) Open(ctx context.Context, name string) (io.ReadCloser, err
 func (fs *FileSystem) Lstat(ctx context.Context, path string) (os.FileInfo, error) {
 	// root is always exists.
 	if path == "" || path == "/" {
-		return commonPrefix{s3.CommonPrefix{
+		return commonPrefix{types.CommonPrefix{
 			Prefix: aws.String(""),
 		}}, nil
 	}
 
 	svc := fs.s3()
 	file := fs.filekey(path)
-	req := svc.ListObjectsV2Request(&s3.ListObjectsV2Input{
+	resp, err := svc.ListObjectsV2(ctx, &s3.ListObjectsV2Input{
 		Bucket:    aws.String(fs.Bucket),
 		Prefix:    aws.String(file),
 		Delimiter: aws.String("/"),
-		MaxKeys:   aws.Int64(1),
+		MaxKeys:   1,
 	})
-	resp, err := req.Send(ctx)
 	if err != nil {
-		if err, ok := err.(awserr.RequestFailure); ok {
-			switch err.StatusCode() {
+		var respErr *awshttp.ResponseError
+		if errors.As(err, &respErr) {
+			switch respErr.HTTPStatusCode() {
 			case http.StatusNotFound:
 				return nil, &os.PathError{
 					Op:   "stat",
@@ -163,10 +165,10 @@ func (fs *FileSystem) Lstat(ctx context.Context, path string) (os.FileInfo, erro
 			Err:  err,
 		}
 	}
-	if len(resp.CommonPrefixes) > 0 && aws.StringValue(resp.CommonPrefixes[0].Prefix) == file+"/" {
+	if len(resp.CommonPrefixes) > 0 && aws.ToString(resp.CommonPrefixes[0].Prefix) == file+"/" {
 		return commonPrefix{resp.CommonPrefixes[0]}, nil
 	}
-	if len(resp.Contents) > 0 && aws.StringValue(resp.Contents[0].Key) == file {
+	if len(resp.Contents) > 0 && aws.ToString(resp.Contents[0].Key) == file {
 		return object{resp.Contents[0]}, nil
 	}
 	return nil, &os.PathError{
@@ -182,21 +184,21 @@ func (fs *FileSystem) Stat(ctx context.Context, path string) (os.FileInfo, error
 }
 
 type object struct {
-	obj s3.Object
+	obj types.Object
 }
 
 func (obj object) Name() string {
-	return pathpkg.Base(aws.StringValue(obj.obj.Key))
+	return pathpkg.Base(aws.ToString(obj.obj.Key))
 }
 
 func (obj object) Size() int64 {
-	return aws.Int64Value(obj.obj.Size)
+	return obj.obj.Size
 }
 func (obj object) Mode() os.FileMode {
 	return 0644
 }
 func (obj object) ModTime() time.Time {
-	return aws.TimeValue(obj.obj.LastModified)
+	return aws.ToTime(obj.obj.LastModified)
 }
 
 func (obj object) IsDir() bool {
@@ -208,11 +210,11 @@ func (obj object) Sys() interface{} {
 }
 
 type commonPrefix struct {
-	prefix s3.CommonPrefix
+	prefix types.CommonPrefix
 }
 
 func (p commonPrefix) Name() string {
-	return pathpkg.Base(strings.TrimSuffix(aws.StringValue(p.prefix.Prefix), "/"))
+	return pathpkg.Base(strings.TrimSuffix(aws.ToString(p.prefix.Prefix), "/"))
 }
 
 func (p commonPrefix) Size() int64 {
@@ -234,26 +236,28 @@ func (p commonPrefix) Sys() interface{} {
 }
 
 // max-keys for test
-var maxKeys = int64(1000)
+var maxKeys = int32(1000)
 
 // ReadDir reads the contents of the directory.
 func (fs *FileSystem) ReadDir(ctx context.Context, path string) ([]os.FileInfo, error) {
 	svc := fs.s3()
-	req := svc.ListObjectsV2Request(&s3.ListObjectsV2Input{
+	paginator := s3.NewListObjectsV2Paginator(svc, &s3.ListObjectsV2Input{
 		Bucket:    aws.String(fs.Bucket),
 		Prefix:    aws.String(fs.dirkey(path)),
 		Delimiter: aws.String("/"),
-		MaxKeys:   &maxKeys,
+		MaxKeys:   maxKeys,
 	})
-	pager := s3.NewListObjectsV2Paginator(req)
 	res := []os.FileInfo{}
-	for pager.Next(ctx) {
+	for paginator.HasMorePages() {
 		// merge Contents and CommonPrefixes
-		resp := pager.CurrentPage()
-		contents := resp.Contents
-		prefixes := resp.CommonPrefixes
+		page, err := paginator.NextPage(ctx)
+		if err != nil {
+			return nil, err
+		}
+		contents := page.Contents
+		prefixes := page.CommonPrefixes
 		for len(contents) > 0 && len(prefixes) > 0 {
-			if aws.StringValue(contents[0].Key) < aws.StringValue(prefixes[0].Prefix) {
+			if aws.ToString(contents[0].Key) < aws.ToString(prefixes[0].Prefix) {
 				res = append(res, object{contents[0]})
 				contents = contents[1:]
 			} else {
@@ -268,29 +272,30 @@ func (fs *FileSystem) ReadDir(ctx context.Context, path string) ([]os.FileInfo, 
 			res = append(res, commonPrefix{v})
 		}
 	}
-	if err := pager.Err(); err != nil {
-		if err, ok := err.(awserr.RequestFailure); ok {
-			switch err.StatusCode() {
-			case http.StatusNotFound:
-				return nil, &os.PathError{
-					Op:   "readdir",
-					Path: filename(path),
-					Err:  os.ErrNotExist,
-				}
-			case http.StatusForbidden:
-				return nil, &os.PathError{
-					Op:   "readdir",
-					Path: filename(path),
-					Err:  os.ErrPermission,
-				}
-			}
-		}
-		return nil, &os.PathError{
-			Op:   "readdir",
-			Path: filename(path),
-			Err:  err,
-		}
-	}
+	// TODO error handling
+	// if err := pager.Err(); err != nil {
+	// 	if err, ok := err.(awserr.RequestFailure); ok {
+	// 		switch err.StatusCode() {
+	// 		case http.StatusNotFound:
+	// 			return nil, &os.PathError{
+	// 				Op:   "readdir",
+	// 				Path: filename(path),
+	// 				Err:  os.ErrNotExist,
+	// 			}
+	// 		case http.StatusForbidden:
+	// 			return nil, &os.PathError{
+	// 				Op:   "readdir",
+	// 				Path: filename(path),
+	// 				Err:  os.ErrPermission,
+	// 			}
+	// 		}
+	// 	}
+	// 	return nil, &os.PathError{
+	// 		Op:   "readdir",
+	// 		Path: filename(path),
+	// 		Err:  err,
+	// 	}
+	// }
 	return res, nil
 }
 
@@ -316,7 +321,7 @@ func (fs *FileSystem) Create(ctx context.Context, name string, body io.Reader) e
 	}
 
 	svc := fs.uploader()
-	_, err = svc.UploadWithContext(ctx, &s3manager.UploadInput{
+	_, err = svc.Upload(ctx, &s3.PutObjectInput{
 		Bucket:      aws.String(fs.Bucket),
 		Key:         aws.String(fs.filekey(name)),
 		Body:        body,
@@ -349,12 +354,12 @@ func (fs *FileSystem) Mkdir(ctx context.Context, name string) error {
 	}
 
 	svc := fs.s3()
-	req := svc.PutObjectRequest(&s3.PutObjectInput{
+	_, err = svc.PutObject(ctx, &s3.PutObjectInput{
 		Bucket: aws.String(fs.Bucket),
 		Key:    aws.String(fs.dirkey(name)),
 		Body:   strings.NewReader(""),
 	})
-	if _, err := req.Send(ctx); err != nil {
+	if err != nil {
 		return &os.PathError{
 			Op:   "mkdir",
 			Path: filename(name),
@@ -374,12 +379,11 @@ func (fs *FileSystem) Remove(ctx context.Context, name string) error {
 	svc := fs.s3()
 	if stat.IsDir() {
 		// the directory is empty?
-		req := svc.ListObjectsV2Request(&s3.ListObjectsV2Input{
+		resp, err := svc.ListObjectsV2(ctx, &s3.ListObjectsV2Input{
 			Bucket:  aws.String(fs.Bucket),
 			Prefix:  aws.String(fs.dirkey(name)),
-			MaxKeys: aws.Int64(1),
+			MaxKeys: 1,
 		})
-		resp, err := req.Send(ctx)
 		if err != nil {
 			return &os.PathError{
 				Op:   "remove",
@@ -387,7 +391,7 @@ func (fs *FileSystem) Remove(ctx context.Context, name string) error {
 				Err:  err,
 			}
 		}
-		if aws.Int64Value(resp.KeyCount) != 0 {
+		if resp.KeyCount != 0 {
 			return &os.PathError{
 				Op:   "remove",
 				Path: filename(name),
@@ -396,11 +400,11 @@ func (fs *FileSystem) Remove(ctx context.Context, name string) error {
 		}
 	}
 
-	req := svc.DeleteObjectRequest(&s3.DeleteObjectInput{
+	_, err = svc.DeleteObject(ctx, &s3.DeleteObjectInput{
 		Bucket: aws.String(fs.Bucket),
 		Key:    aws.String(fs.filekey(name)),
 	})
-	if _, err := req.Send(ctx); err != nil {
+	if err != nil {
 		return &os.PathError{
 			Op:   "remove",
 			Path: filename(name),
