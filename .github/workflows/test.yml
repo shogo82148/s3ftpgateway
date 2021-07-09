@@ -17,6 +17,9 @@ jobs:
           - windows-latest
           - macOS-latest
     steps:
+      - id: check
+        uses: shogo82148/actions-check-permissions@v1
+        
       - name: setup Go ${{ matrix.golang }}
         uses: actions/setup-go@v2
         with:
@@ -36,13 +39,19 @@ jobs:
             ${{ runner.os }}-go-
 
       - name: Configure AWS Credentials
+        if: steps.check.outputs.permission == 'write'
         uses: shogo82148/actions-aws-assume-role@v1
         with:
           aws-region: us-east-1
           role-to-assume: arn:aws:iam::445285296882:role/shogo82148-s3ftpgateway-TestRole-IKN52H3UIP7Y
           role-session-tagging: true
 
-      - name: test
+      - name: integrated test
+        if: steps.check.outputs.permission == 'write'
         run: make test
         env:
           S3FS_TEST_BUCKET: shogo82148-s3ftpgateway
+
+      - name: unit test
+        if: steps.check.outputs.permission != 'write'
+        run: make test
