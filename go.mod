@@ -3,10 +3,10 @@ module github.com/shogo82148/s3ftpgateway
 go 1.16
 
 require (
-	github.com/aws/aws-sdk-go-v2 v1.8.0
-	github.com/aws/aws-sdk-go-v2/config v1.6.0
-	github.com/aws/aws-sdk-go-v2/feature/s3/manager v1.4.0
-	github.com/aws/aws-sdk-go-v2/service/s3 v1.12.0
+	github.com/aws/aws-sdk-go-v2 v1.8.1
+	github.com/aws/aws-sdk-go-v2/config v1.6.1
+	github.com/aws/aws-sdk-go-v2/feature/s3/manager v1.4.1
+	github.com/aws/aws-sdk-go-v2/service/s3 v1.13.0
 	github.com/kr/pretty v0.1.0 // indirect
 	github.com/shogo82148/go-tap v0.0.3
 	github.com/shogo82148/server-starter/listener v1.0.0
