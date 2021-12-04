@@ -19,7 +19,10 @@ func init() {
 func main() {
 	flag.Parse()
 	if showVersion {
-		fmt.Printf("version %s %s %s build with %s", Version, runtime.GOOS, runtime.GOARCH, runtime.Version())
+		fmt.Printf(
+			"s3ftpgateway version %s built with %s %s %s\n",
+			getVersion(), runtime.Version(), runtime.GOOS, runtime.GOARCH,
+		)
 		return
 	}
 	if config == "" {
