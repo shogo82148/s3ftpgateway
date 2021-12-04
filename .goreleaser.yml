@@ -69,3 +69,6 @@ nfpms:
     release: 1
     epoch: 0
     bindir: /usr/bin
+
+changelog:
+  use: github-native
