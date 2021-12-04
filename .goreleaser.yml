@@ -1,0 +1,71 @@
+# Make sure to check the documentation at http://goreleaser.com
+before:
+  hooks:
+    - go mod download
+builds:
+  - id: "cli-amd64"
+    env:
+      - CGO_ENABLED=0
+    main: .
+    goos:
+      - linux
+      - darwin
+      - windows
+    goarch:
+      - amd64
+    binary: s3ftpgateway
+    ldflags:
+      - -s -w
+      - -X github.com/shogo82148/s3ftpgateway.version={{.Version}}
+  - id: "cli-arm64"
+    env:
+      - CGO_ENABLED=0
+    main: .
+    goos:
+      - linux
+      - darwin
+      - windows
+    goarch:
+      - arm64
+    binary: s3ftpgateway
+    ldflags:
+      - -s -w
+      - -X github.com/shogo82148/s3ftpgateway.version={{.Version}}
+archives:
+  - builds:
+      - cli-amd64
+      - cli-arm64
+checksum:
+  name_template: "checksums.txt"
+snapshot:
+  name_template: "{{ .Tag }}-next"
+
+nfpms:
+  - id: package-amd64
+    builds:
+      - cli-amd64
+    homepage: https://github.com/shogo82148/s3ftpgateway/
+    maintainer: Ichinose Shogo <shogo82148@gmail.com>
+    description: FTP server for AWS S3
+    license: MIT
+    formats:
+      - apk
+      - deb
+      - rpm
+    release: 1
+    epoch: 0
+    bindir: /usr/bin
+  - id: package-arm64
+    builds:
+      - cli-arm64
+    homepage: https://github.com/shogo82148/s3ftpgateway/
+    maintainer: Ichinose Shogo <shogo82148@gmail.com>
+    description: FTP server for AWS S3
+    license: MIT
+    formats:
+      - apk
+      - deb
+      - rpm
+    release: 1
+    epoch: 0
+    bindir: /usr/bin
