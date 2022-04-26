@@ -11,7 +11,7 @@ jobs:
       fail-fast: false
       matrix:
         golang:
-          - "1.16"
+          - "1.18"
         os:
           - ubuntu-latest
           - windows-latest
@@ -21,7 +21,7 @@ jobs:
         uses: shogo82148/actions-check-permissions@v1
         
       - name: setup Go ${{ matrix.golang }}
-        uses: actions/setup-go@v2
+        uses: actions/setup-go@v3
         with:
           go-version: ${{ matrix.golang }}
       - name: setup perl
@@ -30,8 +30,8 @@ jobs:
           perl-version: "5.32"
 
       - name: checkout
-        uses: actions/checkout@v2
-      - uses: actions/cache@v2
+        uses: actions/checkout@v3
+      - uses: actions/cache@v3
         with:
           path: ~/go/pkg/mod
           key: ${{ runner.os }}-go-${{ hashFiles('**/go.sum') }}
@@ -40,7 +40,7 @@ jobs:
 
       - name: Configure AWS Credentials
         if: steps.check.outputs.permission == 'write'
-        uses: shogo82148/actions-aws-assume-role@v1
+        uses: fuller-inc/actions-aws-assume-role@v1
         with:
           aws-region: us-east-1
           role-to-assume: arn:aws:iam::445285296882:role/shogo82148-s3ftpgateway-TestRole-IKN52H3UIP7Y
@@ -60,13 +60,13 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
-        uses: actions/checkout@v2
+        uses: actions/checkout@v3
         with:
           fetch-depth: 0
       - name: Set up Go
-        uses: actions/setup-go@v2
+        uses: actions/setup-go@v3
         with:
-          go-version: "1.17"
+          go-version: "1.18"
       - name: Check GoReleaser configure
         uses: goreleaser/goreleaser-action@v2
         with:
