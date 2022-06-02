@@ -17,27 +17,21 @@ jobs:
           - windows-latest
           - macOS-latest
     steps:
-      - id: check
-        uses: shogo82148/actions-check-permissions@v1
-        
+      - name: checkout
+        uses: actions/checkout@v3
+
       - name: setup Go ${{ matrix.golang }}
         uses: actions/setup-go@v3
         with:
           go-version: ${{ matrix.golang }}
+          cache: true
       - name: setup perl
         uses: shogo82148/actions-setup-perl@v1
         with:
           perl-version: "5.32"
 
-      - name: checkout
-        uses: actions/checkout@v3
-      - uses: actions/cache@v3
-        with:
-          path: ~/go/pkg/mod
-          key: ${{ runner.os }}-go-${{ hashFiles('**/go.sum') }}
-          restore-keys: |
-            ${{ runner.os }}-go-
-
+      - id: check
+        uses: shogo82148/actions-check-permissions@v1
       - name: Configure AWS Credentials
         if: steps.check.outputs.permission == 'write'
         uses: fuller-inc/actions-aws-assume-role@v1
