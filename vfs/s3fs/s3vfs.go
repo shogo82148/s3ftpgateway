@@ -139,7 +139,7 @@ func (fs *FileSystem) Lstat(ctx context.Context, path string) (os.FileInfo, erro
 		Bucket:    aws.String(fs.Bucket),
 		Prefix:    aws.String(file),
 		Delimiter: aws.String("/"),
-		MaxKeys:   1,
+		MaxKeys:   aws.Int32(1),
 	})
 	if err != nil {
 		var respErr *awshttp.ResponseError
@@ -192,7 +192,7 @@ func (obj object) Name() string {
 }
 
 func (obj object) Size() int64 {
-	return obj.obj.Size
+	return aws.ToInt64(obj.obj.Size)
 }
 func (obj object) Mode() os.FileMode {
 	return 0644
@@ -245,7 +245,7 @@ func (fs *FileSystem) ReadDir(ctx context.Context, path string) ([]os.FileInfo, 
 		Bucket:    aws.String(fs.Bucket),
 		Prefix:    aws.String(fs.dirkey(path)),
 		Delimiter: aws.String("/"),
-		MaxKeys:   maxKeys,
+		MaxKeys:   aws.Int32(maxKeys),
 	})
 	res := []os.FileInfo{}
 	for paginator.HasMorePages() {
@@ -382,7 +382,7 @@ func (fs *FileSystem) Remove(ctx context.Context, name string) error {
 		resp, err := svc.ListObjectsV2(ctx, &s3.ListObjectsV2Input{
 			Bucket:  aws.String(fs.Bucket),
 			Prefix:  aws.String(fs.dirkey(name)),
-			MaxKeys: 1,
+			MaxKeys: aws.Int32(1),
 		})
 		if err != nil {
 			return &os.PathError{
@@ -391,7 +391,7 @@ func (fs *FileSystem) Remove(ctx context.Context, name string) error {
 				Err:  err,
 			}
 		}
-		if resp.KeyCount != 0 {
+		if aws.ToInt32(resp.KeyCount) != 0 {
 			return &os.PathError{
 				Op:   "remove",
 				Path: filename(name),
