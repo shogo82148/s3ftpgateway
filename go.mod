@@ -10,7 +10,7 @@ require (
 	github.com/shogo82148/go-tap v0.0.3
 	github.com/shogo82148/server-starter/listener v1.0.0
 	github.com/sirupsen/logrus v1.9.3
-	golang.org/x/crypto v0.16.0
+	golang.org/x/crypto v0.17.0
 	gopkg.in/yaml.v2 v2.4.0
 )
 
