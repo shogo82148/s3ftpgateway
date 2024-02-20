@@ -5,8 +5,8 @@ go 1.18
 require (
 	github.com/aws/aws-sdk-go-v2 v1.25.0
 	github.com/aws/aws-sdk-go-v2/config v1.27.0
-	github.com/aws/aws-sdk-go-v2/feature/s3/manager v1.16.1
-	github.com/aws/aws-sdk-go-v2/service/s3 v1.50.0
+	github.com/aws/aws-sdk-go-v2/feature/s3/manager v1.16.2
+	github.com/aws/aws-sdk-go-v2/service/s3 v1.50.1
 	github.com/shogo82148/go-tap v0.0.3
 	github.com/shogo82148/server-starter/listener v1.0.0
 	github.com/sirupsen/logrus v1.9.3
