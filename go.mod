@@ -1,6 +1,6 @@
 module github.com/shogo82148/s3ftpgateway
 
-go 1.18
+go 1.22.1
 
 require (
 	github.com/aws/aws-sdk-go-v2 v1.26.0
